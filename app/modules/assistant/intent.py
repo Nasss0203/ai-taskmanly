@@ -1,0 +1,8 @@
+from enum import Enum
+
+
+class AssistantIntent(str, Enum):
+    CREATE_TASK = "CREATE_TASK"
+    ANALYZE_SPRINT = "ANALYZE_SPRINT"
+    GENERAL_CHAT = "GENERAL_CHAT"
+    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"

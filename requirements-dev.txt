@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Pytest runs both legacy characterization and new internal architecture tests.
+pytest==8.4.2

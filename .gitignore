@@ -1,0 +1,133 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+
+# Type checking and lint cache
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+*.pid.lock
+tmp/
+temp/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded and generated files
+uploads/
+outputs/
+generated/
+artifacts/
+
+# AI model files
+models/
+checkpoints/
+weights/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.bin
+*.gguf
+*.h5
+
+# Hugging Face and model cache
+.cache/
+huggingface/
+transformers_cache/
+torch_cache/
+
+# RAG documents and indexes
+data/raw/
+data/processed/
+data/private/
+vector_store/
+vectorstores/
+indexes/
+embeddings/
+chroma/
+chroma_db/
+faiss_index/
+
+# Evaluation outputs
+evaluation/results/
+eval-results/
+reports/generated/
+
+# Celery / background workers
+celerybeat-schedule
+celerybeat.pid
+
+# Docker local overrides
+docker-compose.override.yml
+
+# Local credentials
+credentials/
+secrets/
+*.pem
+*.key
+*.crt
+service-account*.json
+
+# Node.js, if the AI service has a small frontend/tooling layer
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build tools
+dist/
+coverage/
+tests/
+.pytest_cache/
