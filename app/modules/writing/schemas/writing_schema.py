@@ -31,3 +31,5 @@ class WritingRequest(BaseModel):
 
 class WritingResponse(BaseModel):
     result: str
+    provider: str
+    model: str

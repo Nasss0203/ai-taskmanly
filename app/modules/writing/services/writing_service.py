@@ -55,4 +55,8 @@ class WritingService:
             self.llm_provider.model_name,
             (perf_counter() - started_at) * 1000,
         )
-        return WritingResponse(result=result.strip())
+        return WritingResponse(
+            result=result.strip(),
+            provider=self.llm_provider.provider_name,
+            model=self.llm_provider.model_name,
+        )
