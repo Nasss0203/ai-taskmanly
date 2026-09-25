@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.llm.factory import create_llm_provider
-from app.modules.writing.service import WritingService
+from app.modules.writing.services import WritingService
 
 
 @asynccontextmanager

@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import Header, HTTPException, Request, status
 
-from app.modules.writing.service import WritingService
+from app.modules.writing.services import WritingService
 
 
 async def require_internal_service_token(

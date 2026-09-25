@@ -55,6 +55,7 @@ a real `AI_INTERNAL_TOKEN`. Important settings are:
 - `AI_INTERNAL_TOKEN=<service-to-service secret>`
 
 The development fallback token is rejected when `APP_ENV=production`.
+For a deterministic local smoke test without Ollama, set `LLM_PROVIDER=fake`.
 
 ## Run the API
 
@@ -87,7 +88,8 @@ POST /internal/v1/writing
 
 Writing accepts an explicit action (`IMPROVE`, `SHORTEN`, `EXPAND`,
 `SUMMARIZE`, `TRANSLATE`, or `CONTINUE`) and text. `TRANSLATE` also requires
-`targetLanguage`. The internal provider is selected from configuration and the
+`language` (`targetLanguage` remains accepted as an input alias). The response
+contains `result`. The internal provider is selected from configuration and the
 default development path calls Ollama over HTTP.
 
 ## Run the tests

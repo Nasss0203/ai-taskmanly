@@ -52,6 +52,7 @@ class OllamaProvider:
                 {"role": "user", "content": user_prompt},
             ],
             "stream": False,
+            "think": False,
             "options": {"num_predict": max_new_tokens},
         }
 

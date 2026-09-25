@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     ai_internal_token: SecretStr = SecretStr(DEVELOPMENT_INTERNAL_TOKEN)
 
-    llm_provider: Literal["ollama"] = "ollama"
+    llm_provider: Literal["ollama", "fake"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     ollama_timeout_seconds: float = 60.0

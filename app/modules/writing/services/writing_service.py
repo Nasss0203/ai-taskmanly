@@ -3,7 +3,7 @@ from time import perf_counter
 
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
-from app.modules.writing.prompts import build_writing_prompts
+from app.modules.writing.prompts import build_writing_prompt
 from app.modules.writing.schemas import WritingRequest, WritingResponse
 
 
@@ -14,8 +14,12 @@ class WritingService:
     def __init__(self, llm_provider: LLMProvider) -> None:
         self.llm_provider = llm_provider
 
-    async def write(self, request: WritingRequest) -> WritingResponse:
-        system_prompt, user_prompt = build_writing_prompts(request)
+    async def process(self, request: WritingRequest) -> WritingResponse:
+        system_prompt, user_prompt = build_writing_prompt(
+            action=request.action,
+            text=request.text,
+            language=request.language,
+        )
         started_at = perf_counter()
         logger.info(
             "writing_started operation=%s provider=%s model=%s",
@@ -23,7 +27,6 @@ class WritingService:
             self.llm_provider.provider_name,
             self.llm_provider.model_name,
         )
-
         try:
             result = await self.llm_provider.generate(
                 system_prompt=system_prompt,
@@ -41,6 +44,7 @@ class WritingService:
                 (perf_counter() - started_at) * 1000,
             )
             raise
+
         if not result.strip():
             raise InvalidLLMResponseError("Writing result is empty.")
 
@@ -51,4 +55,4 @@ class WritingService:
             self.llm_provider.model_name,
             (perf_counter() - started_at) * 1000,
         )
-        return WritingResponse(text=result.strip())
+        return WritingResponse(result=result.strip())

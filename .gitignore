@@ -129,5 +129,4 @@ node_modules/
 # Build tools
 dist/
 coverage/
-tests/
 .pytest_cache/
