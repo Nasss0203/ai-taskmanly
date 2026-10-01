@@ -19,6 +19,19 @@ def test_internal_provider_defaults() -> None:
     assert settings.ollama_timeout_seconds == 60.0
 
 
+def test_continue_model_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OLLAMA_CONTINUE_MODEL", raising=False)
+    assert Settings(_env_file=None).ollama_continue_model is None
+
+
+@pytest.mark.parametrize("model", ["qwen3:4b-instruct", ""])
+def test_continue_model_from_environment(
+    monkeypatch: pytest.MonkeyPatch, model: str
+) -> None:
+    monkeypatch.setenv("OLLAMA_CONTINUE_MODEL", model)
+    assert Settings(_env_file=None).ollama_continue_model == model
+
+
 def test_production_rejects_development_internal_token() -> None:
     with pytest.raises(ValidationError, match="AI_INTERNAL_TOKEN"):
         Settings(

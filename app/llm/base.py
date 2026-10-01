@@ -1,4 +1,18 @@
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+
+@dataclass(frozen=True)
+class LLMTokenUsage:
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+@dataclass(frozen=True)
+class LLMGenerationResult:
+    text: str
+    usage: LLMTokenUsage | None = None
 
 
 class LLMProvider(Protocol):
@@ -10,7 +24,8 @@ class LLMProvider(Protocol):
         system_prompt: str,
         user_prompt: str,
         max_new_tokens: int = 300,
-    ) -> str:
+        response_schema: dict[str, Any] | None = None,
+    ) -> LLMGenerationResult:
         ...
 
     async def close(self) -> None:

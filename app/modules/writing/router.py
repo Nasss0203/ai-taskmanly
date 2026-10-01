@@ -18,6 +18,7 @@ router = APIRouter()
 @router.post(
     "",
     response_model=WritingResponse,
+    response_model_exclude_none=True,
 )
 async def writing(
     request: WritingRequest,

@@ -10,6 +10,7 @@ from app.core.exceptions import (
     LLMTimeoutError,
     LLMUnavailableError,
 )
+from app.llm.base import LLMGenerationResult, LLMTokenUsage
 
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,10 @@ class OllamaProvider:
         system_prompt: str,
         user_prompt: str,
         max_new_tokens: int = 300,
-    ) -> str:
+        response_schema: dict[str, Any] | None = None,
+    ) -> LLMGenerationResult:
         started_at = perf_counter()
+
         logger.info(
             "llm_request_started provider=%s model=%s",
             self.provider_name,
@@ -48,41 +51,83 @@ class OllamaProvider:
         payload: dict[str, Any] = {
             "model": self.model_name,
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
             ],
             "stream": False,
             "think": False,
-            "options": {"num_predict": max_new_tokens},
+            "options": {
+                "num_predict": max_new_tokens,
+            },
         }
 
+        if response_schema is not None:
+            payload["format"] = response_schema
+            payload["options"]["temperature"] = 0
+
         try:
-            response = await self._client.post("/api/chat", json=payload)
+            response = await self._client.post(
+                "/api/chat",
+                json=payload,
+            )
             response.raise_for_status()
         except httpx.TimeoutException as exc:
-            self._log_failure(started_at, "timeout")
-            raise LLMTimeoutError("Ollama request timed out.") from exc
+            self._log_failure(
+                started_at,
+                "timeout",
+            )
+            raise LLMTimeoutError(
+                "Ollama request timed out."
+            ) from exc
         except httpx.HTTPStatusError as exc:
-            self._log_failure(started_at, f"http_{exc.response.status_code}")
+            self._log_failure(
+                started_at,
+                f"http_{exc.response.status_code}",
+            )
+
             if exc.response.status_code >= 500:
-                raise LLMUnavailableError("Ollama is unavailable.") from exc
-            raise LLMProviderError("Ollama rejected the request.") from exc
+                raise LLMUnavailableError(
+                    "Ollama is unavailable."
+                ) from exc
+
+            raise LLMProviderError(
+                "Ollama rejected the request."
+            ) from exc
         except httpx.RequestError as exc:
-            self._log_failure(started_at, "connection")
-            raise LLMUnavailableError("Cannot connect to Ollama.") from exc
+            self._log_failure(
+                started_at,
+                "connection",
+            )
+            raise LLMUnavailableError(
+                "Cannot connect to Ollama."
+            ) from exc
 
         try:
             data = response.json()
             content = data["message"]["content"]
         except (ValueError, KeyError, TypeError) as exc:
-            self._log_failure(started_at, "invalid_response")
+            self._log_failure(
+                started_at,
+                "invalid_response",
+            )
             raise InvalidLLMResponseError(
                 "Ollama response does not contain message content."
             ) from exc
 
         if not isinstance(content, str) or not content.strip():
-            self._log_failure(started_at, "empty_response")
-            raise InvalidLLMResponseError("Ollama response content is empty.")
+            self._log_failure(
+                started_at,
+                "empty_response",
+            )
+            raise InvalidLLMResponseError(
+                "Ollama response content is empty."
+            )
 
         logger.info(
             "llm_request_succeeded provider=%s model=%s latency_ms=%.2f",
@@ -90,13 +135,40 @@ class OllamaProvider:
             self.model_name,
             (perf_counter() - started_at) * 1000,
         )
-        return content.strip()
+
+        prompt_tokens = data.get("prompt_eval_count")
+        completion_tokens = data.get("eval_count")
+
+        usage = None
+
+        if (
+            isinstance(prompt_tokens, int)
+            and not isinstance(prompt_tokens, bool)
+            and prompt_tokens >= 0
+            and isinstance(completion_tokens, int)
+            and not isinstance(completion_tokens, bool)
+            and completion_tokens >= 0
+        ):
+            usage = LLMTokenUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+            )
+
+        return LLMGenerationResult(
+            text=content,
+            usage=usage,
+        )
 
     async def close(self) -> None:
         if self._owns_client:
             await self._client.aclose()
 
-    def _log_failure(self, started_at: float, reason: str) -> None:
+    def _log_failure(
+        self,
+        started_at: float,
+        reason: str,
+    ) -> None:
         logger.warning(
             "llm_request_failed provider=%s model=%s reason=%s latency_ms=%.2f",
             self.provider_name,

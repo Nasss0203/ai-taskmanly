@@ -1,14 +1,96 @@
 import sys
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.config import Settings
+from app.llm.base import LLMGenerationResult, LLMTokenUsage
 from app.modules.writing.services import WritingService
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
 
 TEST_TOKEN = "test-internal-service-token"
+
+
+@pytest.mark.parametrize(
+    ("mode", "override", "separate"),
+    [
+        ("ollama", "qwen3:4b-instruct", True),
+        ("ollama", None, False),
+        ("ollama", "", False),
+        ("ollama", "qwen3:1.7b", False),
+        ("fake", "qwen3:4b-instruct", False),
+    ],
+)
+def test_lifespan_routes_models_and_closes_providers(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    override: str | None,
+    separate: bool,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        ai_internal_token=TEST_TOKEN,
+        llm_provider=mode,
+        ollama_model="qwen3:1.7b",
+        ollama_continue_model=override,
+    )
+    default = FakeLLMProvider([" improved", " continuation"])
+    default.model_name = "qwen3:1.7b"
+    default.close = AsyncMock()
+    continuation = FakeLLMProvider([" continuation"])
+    continuation.model_name = "qwen3:4b-instruct"
+    continuation.close = AsyncMock()
+    factory = Mock(side_effect=[default, continuation])
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+    monkeypatch.setattr("app.main.create_llm_provider", factory)
+
+    with TestClient(app) as client:
+        for action in ["IMPROVE", "CONTINUE"]:
+            response = client.post(
+                "/internal/v1/writing",
+                headers={"X-Internal-Service-Token": TEST_TOKEN},
+                json={"action": action, "text": "Source"},
+            )
+            assert response.status_code == 200
+            expected = continuation if separate and action == "CONTINUE" else default
+            assert response.json()["model"] == expected.model_name
+        assert factory.call_count == (2 if separate else 1)
+        if separate:
+            assert factory.call_args_list[1].args[0].ollama_model == override
+        assert settings.ollama_model == "qwen3:1.7b"
+
+    default.close.assert_awaited_once()
+    if separate:
+        continuation.close.assert_awaited_once()
+    else:
+        continuation.close.assert_not_awaited()
+
+
+def test_lifespan_closes_default_when_override_creation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="ollama",
+        ollama_model="qwen3:1.7b",
+        ollama_continue_model="qwen3:4b-instruct",
+    )
+    provider = FakeLLMProvider([])
+    provider.close = AsyncMock()
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "app.main.create_llm_provider",
+        Mock(side_effect=[provider, RuntimeError("override creation failed")]),
+    )
+
+    with pytest.raises(RuntimeError, match="override creation failed"):
+        with TestClient(app):
+            pass
+
+    provider.close.assert_awaited_once()
 
 
 @pytest.fixture
@@ -67,7 +149,11 @@ def test_internal_writing_uses_composed_service(client: TestClient) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"result": "Nội dung đã cải thiện."}
+    assert response.json() == {
+        "result": "Nội dung đã cải thiện.",
+        "provider": "fake",
+        "model": "fake-model",
+    }
     assert len(provider.calls) == 1
 
 
@@ -94,7 +180,29 @@ def test_internal_writing_actions_return_result(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"result": "Processed text"}
+    assert response.json() == {
+        "result": "Processed text",
+        "provider": "fake",
+        "model": "fake-model",
+    }
+
+
+def test_internal_writing_returns_usage(client: TestClient) -> None:
+    client.app.state.writing_service = WritingService(FakeLLMProvider([
+        LLMGenerationResult("Result", LLMTokenUsage(10, 5, 15))
+    ]))
+    response = client.post(
+        "/internal/v1/writing",
+        headers={"X-Internal-Service-Token": TEST_TOKEN},
+        json={"action": "IMPROVE", "text": "Source"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "result": "Result",
+        "provider": "fake",
+        "model": "fake-model",
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
 
 
 def test_internal_writing_rejects_empty_text(client: TestClient) -> None:

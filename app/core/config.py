@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     llm_provider: Literal["ollama", "fake"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
+    ollama_continue_model: str | None = None
+    ollama_page_composition_model: str | None = None
     ollama_timeout_seconds: float = 60.0
 
     @model_validator(mode="after")

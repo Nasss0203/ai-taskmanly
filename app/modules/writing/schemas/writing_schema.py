@@ -29,7 +29,14 @@ class WritingRequest(BaseModel):
         return self
 
 
+class WritingUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
 class WritingResponse(BaseModel):
     result: str
     provider: str
     model: str
+    usage: WritingUsage | None = None

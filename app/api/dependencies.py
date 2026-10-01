@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Header, HTTPException, Request, status
 
 from app.modules.writing.services import WritingService
+from app.modules.page_composition.services import PageCompositionService
 
 
 async def require_internal_service_token(
@@ -22,4 +23,9 @@ async def require_internal_service_token(
 
 
 def get_writing_service(request: Request) -> WritingService:
-    return request.app.state.writing_service
+    return request.app.state.writing_service 
+
+def get_page_composition_service(
+    request: Request,
+) -> PageCompositionService:
+    return request.app.state.page_composition_service
