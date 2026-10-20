@@ -25,9 +25,15 @@ class OllamaProvider:
         model_name: str,
         timeout_seconds: float,
         client: httpx.AsyncClient | None = None,
+        num_ctx: int | None = None,
+        num_gpu: int | None = None,
     ) -> None:
         self.model_name = model_name
+        self._num_ctx = num_ctx
+        self._num_gpu = num_gpu
+
         self._owns_client = client is None
+
         self._client = client or httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=timeout_seconds,
@@ -46,6 +52,22 @@ class OllamaProvider:
             "llm_request_started provider=%s model=%s",
             self.provider_name,
             self.model_name,
+        )
+
+        logger.info(
+            "llm_request_payload "
+            "provider=%s model=%s "
+            "system_chars=%d user_chars=%d "
+            "max_new_tokens=%d num_ctx=%s "
+            "num_gpu=%s structured=%s",
+            self.provider_name,
+            self.model_name,
+            len(system_prompt),
+            len(user_prompt),
+            max_new_tokens,
+            self._num_ctx,
+            self._num_gpu,
+            response_schema is not None,
         )
 
         payload: dict[str, Any] = {
@@ -67,6 +89,12 @@ class OllamaProvider:
             },
         }
 
+        if self._num_ctx is not None:
+            payload["options"]["num_ctx"] = self._num_ctx
+
+        if self._num_gpu is not None:
+            payload["options"]["num_gpu"] = self._num_gpu
+
         if response_schema is not None:
             payload["format"] = response_schema
             payload["options"]["temperature"] = 0
@@ -76,19 +104,34 @@ class OllamaProvider:
                 "/api/chat",
                 json=payload,
             )
+
             response.raise_for_status()
+
         except httpx.TimeoutException as exc:
             self._log_failure(
                 started_at,
                 "timeout",
             )
+
             raise LLMTimeoutError(
                 "Ollama request timed out."
             ) from exc
+
         except httpx.HTTPStatusError as exc:
             self._log_failure(
                 started_at,
                 f"http_{exc.response.status_code}",
+            )
+
+            error_body = exc.response.text.strip()
+
+            logger.warning(
+                "llm_http_error "
+                "provider=%s model=%s status=%s body=%s",
+                self.provider_name,
+                self.model_name,
+                exc.response.status_code,
+                error_body[:2000] if error_body else "<empty>",
             )
 
             if exc.response.status_code >= 500:
@@ -99,11 +142,13 @@ class OllamaProvider:
             raise LLMProviderError(
                 "Ollama rejected the request."
             ) from exc
+
         except httpx.RequestError as exc:
             self._log_failure(
                 started_at,
                 "connection",
             )
+
             raise LLMUnavailableError(
                 "Cannot connect to Ollama."
             ) from exc
@@ -111,11 +156,13 @@ class OllamaProvider:
         try:
             data = response.json()
             content = data["message"]["content"]
+
         except (ValueError, KeyError, TypeError) as exc:
             self._log_failure(
                 started_at,
                 "invalid_response",
             )
+
             raise InvalidLLMResponseError(
                 "Ollama response does not contain message content."
             ) from exc
@@ -125,12 +172,14 @@ class OllamaProvider:
                 started_at,
                 "empty_response",
             )
+
             raise InvalidLLMResponseError(
                 "Ollama response content is empty."
             )
 
         logger.info(
-            "llm_request_succeeded provider=%s model=%s latency_ms=%.2f",
+            "llm_request_succeeded "
+            "provider=%s model=%s latency_ms=%.2f",
             self.provider_name,
             self.model_name,
             (perf_counter() - started_at) * 1000,
@@ -170,7 +219,8 @@ class OllamaProvider:
         reason: str,
     ) -> None:
         logger.warning(
-            "llm_request_failed provider=%s model=%s reason=%s latency_ms=%.2f",
+            "llm_request_failed "
+            "provider=%s model=%s reason=%s latency_ms=%.2f",
             self.provider_name,
             self.model_name,
             reason,

@@ -13,6 +13,10 @@ def create_llm_provider(settings: Settings) -> LLMProvider:
             base_url=settings.ollama_base_url,
             model_name=settings.ollama_model,
             timeout_seconds=settings.ollama_timeout_seconds,
+            num_ctx=settings.ollama_num_ctx,
+            num_gpu=settings.ollama_num_gpu,
         )
 
-    raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")
+    raise ValueError(
+        f"Unsupported LLM provider: {settings.llm_provider}"
+    )

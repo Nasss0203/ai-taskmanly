@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -7,7 +7,12 @@ from app.api.v1.router import router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.llm.base import LLMProvider
 from app.llm.factory import create_llm_provider
+from app.modules.modification_planner.services.modification_planner_service import (
+    ModificationPlannerService,
+)
+from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.page_composition.services import PageCompositionService
 from app.modules.writing.services import WritingService
 
@@ -17,54 +22,112 @@ async def lifespan(application: FastAPI):
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    provider = create_llm_provider(settings)
+    async with AsyncExitStack() as exit_stack:
+        provider = create_llm_provider(settings)
 
-    continue_provider = None
-    page_composition_provider = provider
+        exit_stack.push_async_callback(provider.close)
 
-    try:
-        if (
-            settings.llm_provider == "ollama"
-            and settings.ollama_continue_model
-            and settings.ollama_continue_model != settings.ollama_model
-        ):
-            continue_settings = settings.model_copy(
+        providers_by_config: dict[
+            tuple[str, int | None],
+            LLMProvider,
+        ] = {}
+
+        if settings.llm_provider == "ollama":
+            providers_by_config[
+                (
+                    settings.ollama_model,
+                    settings.ollama_num_gpu,
+                )
+            ] = provider
+
+        def get_or_create_ollama_provider(
+            model_name: str,
+            num_gpu: int | None,
+        ) -> LLMProvider:
+            key = (model_name, num_gpu)
+
+            existing_provider = providers_by_config.get(key)
+
+            if existing_provider is not None:
+                return existing_provider
+
+            model_settings = settings.model_copy(
                 update={
-                    "ollama_model": settings.ollama_continue_model,
+                    "ollama_model": model_name,
+                    "ollama_num_gpu": num_gpu,
                 }
             )
 
-            continue_provider = create_llm_provider(
-                continue_settings
+            new_provider = create_llm_provider(
+                model_settings
             )
 
-        if (
-            settings.llm_provider == "ollama"
-            and settings.ollama_page_composition_model
-        ):
-            page_model = (
-                settings.ollama_page_composition_model
+            exit_stack.push_async_callback(
+                new_provider.close
             )
 
-            if page_model == settings.ollama_model:
-                page_composition_provider = provider
+            providers_by_config[key] = new_provider
 
-            elif (
-                continue_provider is not None
-                and page_model == settings.ollama_continue_model
+            return new_provider
+
+        continue_provider = None
+        page_composition_provider = provider
+        modification_planner_provider = provider
+
+        if settings.llm_provider == "ollama":
+
+            # 1. CONTINUE provider
+            if (
+                settings.ollama_continue_model
+                and settings.ollama_continue_model
+                != settings.ollama_model
             ):
-                page_composition_provider = continue_provider
-
-            else:
-                page_settings = settings.model_copy(
-                    update={
-                        "ollama_model": page_model,
-                    }
+                continue_provider = get_or_create_ollama_provider(
+                    settings.ollama_continue_model,
+                    settings.ollama_num_gpu,
                 )
 
+            # 2. PAGE COMPOSITION provider
+            if settings.ollama_page_composition_model:
                 page_composition_provider = (
-                    create_llm_provider(
-                        page_settings
+                    get_or_create_ollama_provider(
+                        settings.ollama_page_composition_model,
+                        settings.ollama_num_gpu,
+                    )
+                )
+
+            # Preserve the original planner fallback:
+            # use Page Composition provider when no
+            # modification-specific override is configured.
+            modification_planner_provider = (
+                page_composition_provider
+            )
+
+            # 3. MODIFICATION PLANNER provider
+            if (
+                settings.ollama_modification_planner_model
+                or settings.ollama_modification_planner_num_gpu
+                is not None
+            ):
+                planner_model = (
+                    settings.ollama_modification_planner_model
+                    or settings.ollama_page_composition_model
+                    or settings.ollama_model
+                )
+
+                planner_num_gpu = (
+                    settings.ollama_modification_planner_num_gpu
+                    if (
+                        settings.ollama_modification_planner_num_gpu
+                        is not None
+                    )
+                    else settings.ollama_num_gpu
+                )
+
+                modification_planner_provider = (
+                    get_or_create_ollama_provider(
+                        planner_model,
+                        planner_num_gpu,
                     )
                 )
 
@@ -81,22 +144,14 @@ async def lifespan(application: FastAPI):
             )
         )
 
+        application.state.modification_planner_service = (
+            ModificationPlannerService(
+                modification_planner_provider
+            )
+        )
+        application.state.page_intent_service = PageIntentService(provider)
+
         yield
-
-    finally:
-        if (
-            page_composition_provider is not provider
-            and page_composition_provider is not continue_provider
-        ):
-            await page_composition_provider.close()
-
-        if (
-            continue_provider is not None
-            and continue_provider is not provider
-        ):
-            await continue_provider.close()
-
-        await provider.close()
 
 
 app = FastAPI(

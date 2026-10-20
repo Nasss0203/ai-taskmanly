@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,10 +20,26 @@ class Settings(BaseSettings):
     ai_internal_token: SecretStr = SecretStr(DEVELOPMENT_INTERNAL_TOKEN)
 
     llm_provider: Literal["ollama", "fake"] = "ollama"
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
+
     ollama_continue_model: str | None = None
     ollama_page_composition_model: str | None = None
+    ollama_modification_planner_model: str | None = None
+
+    ollama_num_ctx: int = 16384
+
+    # Default GPU setting for Ollama providers.
+    # None means no explicit num_gpu override.
+    ollama_num_gpu: int | None = Field(default=None, ge=0)
+
+    # Dedicated GPU override for Modification Planner.
+    ollama_modification_planner_num_gpu: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
     ollama_timeout_seconds: float = 60.0
 
     @model_validator(mode="after")
@@ -33,7 +49,10 @@ class Settings(BaseSettings):
             and self.ai_internal_token.get_secret_value()
             == DEVELOPMENT_INTERNAL_TOKEN
         ):
-            raise ValueError("AI_INTERNAL_TOKEN must be configured in production.")
+            raise ValueError(
+                "AI_INTERNAL_TOKEN must be configured in production."
+            )
+
         return self
 
 
