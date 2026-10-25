@@ -14,7 +14,9 @@ from app.modules.page_intent.services.page_reference_evidence import (
     detect_page_reference,
     explicit_trailing_page_edit,
     is_standalone_writing_request,
+    is_read_only_page_request,
     normalize,
+    source_backed_edit_instruction,
 )
 from app.shared.json_parser import parse_json_object
 
@@ -67,7 +69,9 @@ class PageIntentService:
                     raw = parse_json_object(generated.text)
                 except ValueError as exc:
                     raise RetryablePageIntentError("Model returned invalid JSON.") from exc
-                result = self._validate_and_ground(raw, request.instruction)
+                result = self._validate_and_ground(
+                    raw, request.instruction, has_current_page=bool(request.currentPageId),
+                )
                 break
             except RetryablePageIntentError as exc:
                 logger.warning(
@@ -76,6 +80,13 @@ class PageIntentService:
                     attempt + 1,
                     self.llm_provider.model_name,
                 )
+                if attempt == 1 and isinstance(exc, PageIntentTitleMismatch):
+                    # Disagreement on where a bare name ends is not an error:
+                    # use neither title and let NestJS match real Page names.
+                    result = self._unresolved_edit(
+                        request.instruction, has_current_page=bool(request.currentPageId),
+                    )
+                    break
                 if attempt == 1:
                     raise InvalidLLMResponseError(
                         "AI page intent extraction returned an invalid result."
@@ -97,7 +108,21 @@ class PageIntentService:
         )
 
     @staticmethod
-    def _validate_and_ground(raw: dict, source: str) -> PageIntentExtraction:
+    def _unresolved_edit(source: str, *, has_current_page: bool) -> PageIntentExtraction:
+        # A title mismatch is only raised after the source-backed edit check.
+        evidence = detect_page_reference(source, has_current_page=has_current_page)
+        return PageIntentExtraction.model_validate({
+            "intent": "MODIFY_PAGE",
+            "referenceType": "UNRESOLVED",
+            "pageReference": None,
+            "instruction": source_backed_edit_instruction(source, evidence),
+            "needsClarification": True,
+        })
+
+    @staticmethod
+    def _validate_and_ground(
+        raw: dict, source: str, *, has_current_page: bool = False,
+    ) -> PageIntentExtraction:
         # Even a model-generated pageId or unknown field invalidates the whole
         # response. Do not silently strip untrusted fields.
         required = {
@@ -120,7 +145,7 @@ class PageIntentService:
             # No editing instruction should escape the non-modification branch.
             if raw["referenceType"] != "UNRESOLVED" or raw["pageReference"] is not None:
                 raise RetryablePageIntentError("OTHER must not refer to an existing Page.")
-            evidence = detect_page_reference(source)
+            evidence = detect_page_reference(source, has_current_page=has_current_page)
             if evidence.reference_type in ("TITLE", "CURRENT_PAGE") and evidence.instruction:
                 return PageIntentExtraction.model_validate({
                     "intent": "MODIFY_PAGE",
@@ -136,7 +161,7 @@ class PageIntentService:
         if raw["intent"] == "UNCLEAR":
             if raw["referenceType"] != "UNRESOLVED" or raw["pageReference"] is not None:
                 raise RetryablePageIntentError("UNCLEAR must not refer to an existing Page.")
-            evidence = detect_page_reference(source)
+            evidence = detect_page_reference(source, has_current_page=has_current_page)
             if evidence.reference_type in ("TITLE", "CURRENT_PAGE") and evidence.instruction:
                 return PageIntentExtraction.model_validate({
                     "intent": "MODIFY_PAGE",
@@ -170,8 +195,21 @@ class PageIntentService:
 
         # Only an actual modification may carry an instruction. A target
         # derived from syntactic evidence overrides an LLM's unsafe guess.
-        evidence = detect_page_reference(source)
+        evidence = detect_page_reference(source, has_current_page=has_current_page)
+        instruction = source_backed_edit_instruction(source, evidence)
+        if instruction is None:
+            read_only = is_read_only_page_request(source)
+            return PageIntentExtraction.model_validate({
+                "intent": "OTHER" if read_only else "UNCLEAR",
+                "referenceType": "UNRESOLVED",
+                "pageReference": None,
+                "instruction": None,
+                "needsClarification": not read_only,
+            })
         candidate = raw["pageReference"]
+        if raw["referenceType"] == "TITLE" and not (candidate or "").strip():
+            # A contract violation stays an error; only a name disagreement is unresolved.
+            raise RetryablePageIntentError("TITLE requires a pageReference.")
         if evidence.reference_type == "TITLE" and raw["referenceType"] == "TITLE":
             grounded_title = normalize(evidence.title or "").strip()
             candidate_title = normalize(candidate or "").strip()
@@ -202,7 +240,6 @@ class PageIntentService:
             reference_type, page_reference, needs_clarification = (
                 "TITLE", evidence.title, False,
             )
-        instruction = evidence.instruction or raw["instruction"]
         return PageIntentExtraction.model_validate({
             "intent": "MODIFY_PAGE",
             "referenceType": reference_type,

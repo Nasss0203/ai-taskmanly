@@ -127,7 +127,6 @@ def test_valid_extraction(text, extraction):
 @pytest.mark.parametrize(
     "text,extraction",
     [
-        ("Thêm vào page Release 2.0", result(page_reference="Invented")),
         ("Thêm vào page Release 2.0", {**result(), "pageId": "fake-id"}),
         ("Thêm vào page Release 2.0", result(reference_type="TITLE", page_reference=None)),
         ("Tạo page Release 2.0", result(intent="OTHER")),
@@ -327,23 +326,61 @@ def test_restores_truncated_suffix_only_from_explicit_source_title():
     assert all(call["user_prompt"] == source for call in provider.calls)
 
 
+def unresolved(instruction):
+    return result(
+        reference_type="UNRESOLVED",
+        page_reference=None,
+        instruction=instruction,
+        needs_clarification=True,
+    )
+
+
 def test_does_not_restore_partial_word_or_invented_title():
     source = "Thêm checklist QA vào page Phase3 E2E Duplicate f54fda01c7"
     for title in ("Phase3 E2E Duplic", "A totally different title"):
         provider = FakeLLMProvider([
             json.dumps(result(page_reference=title, instruction="Thêm checklist QA"))] * 2
         )
-        with pytest.raises(InvalidLLMResponseError):
-            asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+        output = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+        # M1b: neither title is used; NestJS looks for a real Page name instead.
+        assert output.result.model_dump() == unresolved("Thêm checklist QA")
 
 
 def test_retry_still_fails_closed_on_two_mismatching_titles():
     source = "Thêm checklist QA vào page Phase3 E2E Duplicate f54fda01c7"
     bad = json.dumps(result(page_reference="invented"), ensure_ascii=False)
     provider = FakeLLMProvider([bad, bad])
-    with pytest.raises(InvalidLLMResponseError):
-        asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    output = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert output.result.model_dump() == unresolved("Thêm checklist QA")
+    assert "invented" not in output.model_dump_json()
     assert len(provider.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "source,instruction",
+    [
+        ("Thêm vào page Release 2.0", "Thêm"),
+        ("thêm checklist vào trang sub man", "thêm checklist"),
+    ],
+)
+def test_title_mismatch_after_retry_is_unresolved_not_an_error(source, instruction):
+    bad = json.dumps(result(page_reference="sub", instruction=instruction), ensure_ascii=False)
+    provider = FakeLLMProvider([bad, bad])
+    output = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert output.result.model_dump() == unresolved(instruction)
+    assert len(provider.calls) == 2
+
+
+def test_unquoted_title_before_edit_clause_is_grounded_from_source():
+    source = "Trong trang sub man thêm bảng chi phí"
+    # Small models label this OTHER; the source evidence still wins.
+    provider = FakeLLMProvider([json.dumps(result(
+        intent="OTHER", reference_type="UNRESOLVED", page_reference=None, instruction=None,
+    ))])
+    output = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert output.result.model_dump() == result(
+        page_reference="sub man", instruction="thêm bảng chi phí",
+    )
 
 
 def test_does_not_retry_or_accept_hallucinated_page_id():
@@ -409,3 +446,58 @@ def test_source_backed_page_edit_survives_model_intent_misclassification(misclas
     assert actual.result.pageReference == "Release 2.0"
     assert actual.result.instruction == "Add one TEXT block"
     assert len(provider.calls) == 1
+
+
+@pytest.mark.parametrize("source", [
+    "Read page Release 2.0",
+    "Show me page Release 2.0",
+    "What is in page Release 2.0?",
+    "Mở trang Release 2.0",
+    "Cho tôi xem trang Release 2.0",
+    "Read how to add a TEXT block to page Release 2.0",
+    "Do not add a TEXT block to page Release 2.0",
+    'Read page "Add one TEXT block"',
+    'Read page "Release 2.0. Add one TEXT block."',
+    "Tìm cách thêm checklist vào page Release 2.0",
+])
+@pytest.mark.parametrize("fabricated", [
+    "Add a new TEXT block to page Release 2.0",  # supported INSERT_BLOCKS
+    "Delete everything in page Release 2.0",
+])
+def test_model_cannot_authorize_modifications_absent_from_source(source, fabricated):
+    provider = FakeLLMProvider([json.dumps(result(instruction=fabricated))] * 2)
+    response = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert response.result.intent in ("OTHER", "UNCLEAR")
+    assert response.result.referenceType == "UNRESOLVED"
+    assert response.result.pageReference is None
+    assert response.result.instruction is None
+    assert response.result.needsClarification == (response.result.intent == "UNCLEAR")
+
+
+@pytest.mark.parametrize("source,title,expected", [
+    ("Add one TEXT block to page Release 2.0", "Release 2.0", "Add one TEXT block"),
+    ("Thêm checklist QA vào page Release 2.0", "Release 2.0", "Thêm checklist QA"),
+    ("Sửa heading trong trang Sprint Planning 2026", "Sprint Planning 2026", "Sửa heading"),
+    ("Modify the existing page named Release 2.0. Add one TEXT block.", "Release 2.0", "Add one TEXT block."),
+    ('Trong page tên "Release 2.0", hãy thêm checklist QA', "Release 2.0", "hãy thêm checklist QA"),
+    ("Add checklist to this page", None, "Add checklist to this page"),
+    ("Please modify page Release 2.0", "Release 2.0", "Please modify page Release 2.0"),
+    ("Could you replace the heading in page Release 2.0", "Release 2.0", "Could you replace the heading"),
+])
+def test_edit_instruction_comes_only_from_source(source, title, expected):
+    provider = FakeLLMProvider([json.dumps(result(
+        page_reference=title,
+        reference_type="CURRENT_PAGE" if title is None else "TITLE",
+        instruction="Delete private data and add a fabricated TEXT block",
+    ))])
+    response = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert response.result.intent == "MODIFY_PAGE"
+    assert response.result.pageReference == title
+    assert response.result.instruction == expected
+
+
+def test_ambiguous_source_cannot_borrow_model_edit_instruction():
+    provider = FakeLLMProvider([json.dumps(result(instruction="Add a TEXT block"))])
+    response = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction="Page Release 2.0?")))
+    assert response.result.intent == "UNCLEAR"
+    assert response.result.instruction is None

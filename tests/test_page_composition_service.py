@@ -553,3 +553,46 @@ def test_page_composition_sums_usage_across_repair() -> None:
         "completion_tokens": 100,
         "total_tokens": 400,
     }
+
+
+@pytest.mark.parametrize("failure", ["json", "schema", "semantic-repair"])
+def test_invalid_response_logs_never_include_private_content(caplog, failure):
+    private = "SENSITIVE_MODEL_RESPONSE_FIXTURE_49371"
+    prompt = "SENSITIVE_USER_INSTRUCTION_FIXTURE_49371"
+    context = "SENSITIVE_PAGE_CONTEXT_FIXTURE_49371"
+    if failure == "json":
+        responses = [private]
+    elif failure == "schema":
+        draft = make_valid_draft()
+        draft["page"]["title"] = {"private": private}
+        responses = [json.dumps(draft)]
+    else:
+        draft = make_valid_draft()
+        draft["blocks"] += [
+            {"ref": private, "type": "TEXT", "content": {"text": private}},
+            {"ref": private, "type": "TEXT", "content": {"text": private}},
+        ]
+        responses = [json.dumps(draft), private]
+    provider = FakeLLMProvider(responses)
+    with caplog.at_level("INFO"), pytest.raises(InvalidLLMResponseError) as error:
+        asyncio.run(PageCompositionService(provider).process(
+            PageCompositionRequest(instruction=prompt, context={"text": context})
+        ))
+    for sensitive in (private, prompt, context):
+        assert sensitive not in caplog.text
+        assert sensitive not in str(error.value)
+    assert "provider=fake model=fake-model" in caplog.text
+    assert "error_type=" in caplog.text
+
+
+def test_provider_error_message_is_not_logged(caplog, monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.core.exceptions import LLMUnavailableError
+
+    private = "SENSITIVE_PROVIDER_ERROR_FIXTURE_49371"
+    provider = FakeLLMProvider([])
+    monkeypatch.setattr(provider, "generate", AsyncMock(side_effect=LLMUnavailableError(private)))
+    with caplog.at_level("INFO"), pytest.raises(LLMUnavailableError):
+        asyncio.run(PageCompositionService(provider).process(PageCompositionRequest(instruction="Add")))
+    assert private not in caplog.text
+    assert "error_type=LLMUnavailableError" in caplog.text

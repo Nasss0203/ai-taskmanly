@@ -25,6 +25,7 @@ DESCRIPTIVE_REFERENCE = re.compile(
     r"hôm qua|hôm nay|gần đây|mới đây|"
     r"nói về|viết về|có chủ đề|liên quan|về|chứa|có nội dung|mô tả|"
     r"nào|nào đó|bất kỳ|khác|ở đây|là gì|"
+    r"có pageid|pageid|có id|id|"
     r"i edited|i opened|about|related to|which"
     r")\b",
     re.IGNORECASE,
@@ -35,8 +36,12 @@ EDIT_PREPOSITION = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 EDIT_VERB = re.compile(
-    r"\b(?:thêm|chèn|sửa|chỉnh|chỉnh sửa|cập nhật|đổi|xóa|xoá|"
-    r"bổ sung|ghi|viết|add|insert|edit|update|remove|delete)\b",
+    r"^(?:(?:hãy|vui lòng|giúp tôi|giúp mình|bạn hãy|tôi muốn|mình muốn|"
+    r"please|can you|could you|would you|i want to|i need you to)\s+)*"
+    r"(?:thêm|chèn|sửa|chỉnh|chỉnh sửa|cập nhật|đổi|xóa|xoá|"
+    r"bổ sung|ghi|viết lại|viết|rút gọn|dịch|chép|thay thế|di chuyển|sắp xếp|định dạng|"
+    r"add|insert|edit|update|remove|delete|modify|change|replace|rename|"
+    r"append|prepend|move|reorder|format|rewrite|shorten|translate|copy)\b",
     re.IGNORECASE,
 )
 FOLLOWING_EDIT = re.compile(
@@ -46,8 +51,19 @@ FOLLOWING_EDIT = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 TRAILING_QUOTED_EDIT = re.compile(
-    r"^[,;.]\s*(?P<edit>(?:(?:rồi|sau đó|please)\s+)?"
+    r"^[,;:.]?\s*(?P<edit>(?:(?:rồi|sau đó|please)\s+)?"
     r"(?:hãy\s+)?(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|"
+    r"bổ sung|viết|add|insert|edit|update|remove|delete)\b.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "Trong trang X thêm ..." with a bare X: only a locative (or nothing) may
+# precede the Page noun, and the first edit verb after the name ends it.
+LEADING_LOCATIVE = re.compile(
+    r"^(?:(?:hãy|vui lòng|please)\s+)?(?:(?:trong|ở|tại|in|on|inside)\s+)?$",
+    re.IGNORECASE,
+)
+INLINE_EDIT = re.compile(
+    r"^(?P<title>.+?)\s+(?P<edit>(?:hãy\s+)?(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|"
     r"bổ sung|viết|add|insert|edit|update|remove|delete)\b.*)$",
     re.IGNORECASE | re.DOTALL,
 )
@@ -57,6 +73,12 @@ STANDALONE_WRITING = re.compile(
     r"(?:câu|đoạn|văn bản|bài viết|text|sentence|paragraph|this)\b",
     re.IGNORECASE,
 )
+QUOTED_TEXT = re.compile(r'''(?<!\w)(?:"[^"]*"|'[^']*'|`[^`]*`|“[^”]*”|‘[^’]*’)''')
+
+
+def mask_quoted_text(source: str) -> str:
+    """Quoted titles/source text are data, not new Page markers or commands."""
+    return QUOTED_TEXT.sub(lambda match: " " * len(match.group()), source)
 
 
 def normalize(text: str) -> str:
@@ -84,7 +106,44 @@ def _source_instruction(source: str, marker_start: int) -> str | None:
     if not match:
         return None
     edit = match.group("edit").strip()
-    return edit if EDIT_VERB.search(edit) else None
+    return edit if EDIT_VERB.match(edit) else None
+
+
+def source_backed_edit_instruction(
+    source: str, evidence: PageReferenceEvidence,
+) -> str | None:
+    """Authorize only affirmative edit clauses present in the original input.
+
+    Reference extraction intentionally handles a narrower grammar. Broader
+    commands (e.g. 'Please modify page ...', 'Add ... to this page') may keep
+    the complete source, but never borrow an operation from the model.
+    Words inside Page titles cannot provide the affirmative command.
+    """
+    if evidence.instruction:
+        return evidence.instruction
+    text = unicodedata.normalize("NFC", source).strip()
+    markers = _target_markers(text)
+    prefix = text[:markers[0].start()].strip() if markers else text
+    if not EDIT_VERB.match(prefix):
+        return None
+    if re.search(r"\b(?:about|về)\s*$", prefix, re.IGNORECASE):
+        return None
+    # Creating a new Page does not authorize modifying an existing Page.
+    if markers and re.fullmatch(
+        r"(?:please\s+)?(?:add|insert)\s+(?:(?:a|another|new)\s*)*",
+        prefix, re.IGNORECASE,
+    ):
+        return None
+    return text
+
+
+def is_read_only_page_request(source: str) -> bool:
+    return bool(re.match(
+        r"^(?:(?:please|can you|could you|hãy|vui lòng)\s+)?"
+        r"(?:read|show|view|open|find|search|what|how|đọc|xem|mở|tìm|"
+        r"cho (?:tôi|mình|em) xem)\b",
+        normalize(source).strip(),
+    ))
 
 
 def _is_generic_remention(source: str, marker: re.Match[str]) -> bool:
@@ -108,25 +167,40 @@ def _target_markers(source: str) -> list[re.Match[str]]:
     Other Page references outside the title still count as multiple targets
     and must be clarified.
     """
-    markers = list(PAGE_MARKER.finditer(source))
-    if not markers:
-        return markers
-    start = markers[0].end()
-    remainder = source[start:]
-    prefix = re.match(r"\s*(?:(?:(?:có\s+)?tên|named|called)\s+)?", remainder, re.IGNORECASE)
-    if prefix is None:
-        return markers
-    quote_start = start + prefix.end()
-    if quote_start >= len(source) or source[quote_start] not in {'"', "'", "`", "“", "‘"}:
-        return markers
-    close = {'"': '"', "'": "'", "`": "`", "“": "”", "‘": "’"}[source[quote_start]]
-    quote_end = source.find(close, quote_start + 1)
-    if quote_end < 0:
-        return markers
-    return [
-        marker for marker in markers
-        if not (quote_start < marker.start() < quote_end)
-    ]
+    return list(PAGE_MARKER.finditer(mask_quoted_text(source)))
+
+
+def has_multiple_page_targets(source: str) -> bool:
+    markers = _target_markers(source)
+    return len(markers) > 1 and any(
+        not _is_generic_remention(source, marker) for marker in markers[1:]
+    )
+
+
+def _quoted_insertion_payload(prefix: str, tail: str) -> bool:
+    """Only a block/checklist insertion + labelled, complete quoted content.
+
+    Full matching keeps arbitrary trailing commands out of this grammar.
+    The payload is data; its words never authorize an edit or another target.
+    """
+    command = EDIT_VERB.match(prefix)
+    if not command or not re.search(
+        r"(?:thêm|chèn|add|insert)$", command.group(), re.IGNORECASE,
+    ):
+        return False
+    if not re.fullmatch(
+        r"\s+(?:(?:một|1|a|one)\s+)?"
+        r"(?:(?:text\s+)?block(?:\s+(?:văn bản|text))?|checklist)\s+"
+        r"(?:vào|trong|ở(?:\s+(?:cuối|đầu))?|to|in|on)\s*",
+        prefix[command.end():], re.IGNORECASE,
+    ):
+        return False
+    label = re.match(r"(?:với\s+nội\s+dung|with\s+content)\s*:\s*", tail, re.IGNORECASE)
+    payload = QUOTED_TEXT.match(tail, label.end()) if label else None
+    return bool(
+        payload and payload.group()[1:-1].strip()
+        and not tail[payload.end():].strip(" .!?")
+    )
 
 
 def explicit_trailing_page_edit(source: str) -> PageReferenceEvidence | None:
@@ -151,6 +225,7 @@ def explicit_trailing_page_edit(source: str) -> PageReferenceEvidence | None:
         tail = remainder[close + 1:].strip() if close > 0 else ""
         if close < 1 or not (
             TRAILING_QUOTED_EDIT.fullmatch(tail)
+            or _quoted_insertion_payload(normalized[:markers[0].start()], tail)
             or (evidence.instruction and not tail.strip(".!?"))
         ):
             return None
@@ -159,11 +234,17 @@ def explicit_trailing_page_edit(source: str) -> PageReferenceEvidence | None:
     return evidence
 
 
-def detect_page_reference(source: str) -> PageReferenceEvidence:
+def detect_page_reference(
+    source: str, *, has_current_page: bool = False,
+) -> PageReferenceEvidence:
     normalized = unicodedata.normalize("NFC", source).strip()
     markers = _target_markers(normalized)
 
     if not markers:
+        command = EDIT_VERB.match(normalized)
+        if (has_current_page and command and normalized[command.end():].strip()
+                and not is_standalone_writing_request(normalized)):
+            return PageReferenceEvidence("CURRENT_PAGE", None, normalized)
         return PageReferenceEvidence("UNRESOLVED", None, None)
 
     # Multiple mentions cannot safely be resolved without deeper discourse
@@ -176,14 +257,30 @@ def detect_page_reference(source: str) -> PageReferenceEvidence:
         )
 
     marker = markers[0]
+    # English explicitly puts the quoted title before the Page noun.
+    before = normalized[:marker.start()].rstrip()
+    quoted = list(QUOTED_TEXT.finditer(before))
+    if marker.group().casefold() == "page" and quoted and quoted[-1].end() == len(before):
+        title_match = quoted[-1]
+        prefix = before[:title_match.start()]
+        edit = re.fullmatch(r"(.+?)\s+(?:to|in|on)\s+(?:the\s+)?", prefix, re.IGNORECASE)
+        if edit and EDIT_VERB.match(edit.group(1)) and not normalized[marker.end():].strip(" .!?"):
+            return PageReferenceEvidence("TITLE", title_match.group()[1:-1].strip(), edit.group(1).strip())
     remainder = normalized[marker.end():].strip()
     instruction = _source_instruction(normalized, marker.start())
+    if instruction:
+        remainder = re.sub(r"\s+(?:nhé|nha|ạ)[.!?\s]*$", "", remainder, flags=re.IGNORECASE)
     if not remainder:
         if ENGLISH_CURRENT_BEFORE_MARKER.search(normalized[:marker.start()]):
             return PageReferenceEvidence("CURRENT_PAGE", None, instruction)
         return PageReferenceEvidence("UNRESOLVED", None, instruction)
 
     if CURRENT_REFERENCE.match(remainder):
+        following = CURRENT_REFERENCE.match(remainder)
+        tail = remainder[following.end():].lstrip(" ,;:.")
+        if (not normalized[:marker.start()].strip()
+                and EDIT_VERB.match(tail)):
+            return PageReferenceEvidence("CURRENT_PAGE", None, tail)
         # Only an exact current-page phrase is strong evidence.
         if re.fullmatch(
             r"(?:này|hiện tại|đang mở|this|current)[.!?\s]*",
@@ -213,14 +310,32 @@ def detect_page_reference(source: str) -> PageReferenceEvidence:
         tail = remainder[end + 1:].strip()
         if tail and tail.strip(".!?"):
             later = TRAILING_QUOTED_EDIT.fullmatch(tail)
-            if not later:
-                return PageReferenceEvidence("UNRESOLVED", None, instruction)
-            instruction = (
-                f"{instruction} {later.group('edit').strip()}"
-                if instruction else later.group("edit").strip()
-            )
+            if _quoted_insertion_payload(normalized[:marker.start()], tail):
+                # Keep the original source, including position, quoting and
+                # payload; the prefix alone would lose the content.
+                instruction = source
+            elif not later:
+                # Whole-Page rewrite/translate/rename is an intent only. Keep
+                # the complete source so no requested replacement is lost.
+                direct = normalized[:marker.start()].strip()
+                if (EDIT_VERB.match(direct)
+                        and re.match(r"^(?:cho|thành|sang|to|for)\b", tail, re.IGNORECASE)):
+                    instruction = normalized
+                else:
+                    return PageReferenceEvidence("UNRESOLVED", None, instruction)
+            else:
+                instruction = (
+                    f"{instruction} {later.group('edit').strip()}"
+                    if instruction else later.group("edit").strip()
+                )
     else:
         trailing_edit = FOLLOWING_EDIT.match(remainder)
+        inline_edit = (
+            INLINE_EDIT.match(remainder)
+            if not trailing_edit and not instruction
+            and LEADING_LOCATIVE.match(normalized[:marker.start()])
+            else None
+        )
         if trailing_edit:
             remainder = trailing_edit.group("title").strip()
             later_instruction = trailing_edit.group("edit").strip()
@@ -228,6 +343,9 @@ def detect_page_reference(source: str) -> PageReferenceEvidence:
                 f"{instruction} {later_instruction}"
                 if instruction else later_instruction
             )
+        elif inline_edit:
+            remainder = inline_edit.group("title").strip()
+            instruction = inline_edit.group("edit").strip()
         elif "," in remainder or ";" in remainder:
             # A bare title containing punctuation must be quoted to avoid
             # accidentally swallowing instructions into the Page name.

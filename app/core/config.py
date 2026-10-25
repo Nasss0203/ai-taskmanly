@@ -1,4 +1,5 @@
-from typing import Literal
+import re
+from typing import Any, Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,12 +13,13 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     app_env: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
 
-    ai_internal_token: SecretStr = SecretStr(DEVELOPMENT_INTERNAL_TOKEN)
+    ai_internal_token: SecretStr = SecretStr("")
 
     llm_provider: Literal["ollama", "fake"] = "ollama"
 
@@ -42,15 +44,46 @@ class Settings(BaseSettings):
 
     ollama_timeout_seconds: float = 60.0
 
+    @model_validator(mode="before")
+    @classmethod
+    def protect_token_in_validation_errors(cls, values: Any) -> Any:
+        # BaseSettings builds its own input mapping. Wrap before any field or
+        # model can fail so even ValidationError.json() redacts the secret.
+        if isinstance(values, dict) and isinstance(values.get("ai_internal_token"), str):
+            values["ai_internal_token"] = SecretStr(values["ai_internal_token"])
+        return values
+
     @model_validator(mode="after")
-    def validate_production_token(self) -> "Settings":
+    def validate_internal_token(self) -> "Settings":
+        if self.app_env == "test":
+            return self
+
+        token = self.ai_internal_token.get_secret_value()
+        normalized = re.sub(r"[^a-z0-9]", "", token.casefold())
+        placeholders = (
+            "development", "changeme", "replaceme", "replacewith", "placeholder",
+            "yourtoken", "yourinternal", "yoursecret", "example", "testtoken", "password",
+        )
+        # A format check cannot prove entropy: deployment secrets must be
+        # randomly generated. Accept hex/base64url without imposing an alphabet.
         if (
-            self.app_env == "production"
-            and self.ai_internal_token.get_secret_value()
-            == DEVELOPMENT_INTERNAL_TOKEN
+            len(token) < 32
+            or not token.isascii()
+            or not token.isprintable()
+            or any(char.isspace() for char in token)
+            or len(set(token)) < 12
+            or any(marker in normalized for marker in placeholders)
+            or any(
+                token == token[:size] * (len(token) // size)
+                for size in range(1, len(token) // 2 + 1)
+                if len(token) % size == 0
+            )
         ):
             raise ValueError(
-                "AI_INTERNAL_TOKEN must be configured in production."
+                "AI_INTERNAL_TOKEN must be a randomly generated secret with "
+                "at least 32 printable ASCII characters, no whitespace, "
+                "at least 12 distinct characters, no repeated pattern, "
+                "and no placeholder text."
             )
 
         return self

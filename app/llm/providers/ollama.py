@@ -123,15 +123,12 @@ class OllamaProvider:
                 f"http_{exc.response.status_code}",
             )
 
-            error_body = exc.response.text.strip()
-
             logger.warning(
                 "llm_http_error "
-                "provider=%s model=%s status=%s body=%s",
+                "provider=%s model=%s status=%s",
                 self.provider_name,
                 self.model_name,
                 exc.response.status_code,
-                error_body[:2000] if error_body else "<empty>",
             )
 
             if exc.response.status_code >= 500:

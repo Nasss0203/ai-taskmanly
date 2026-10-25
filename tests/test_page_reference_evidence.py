@@ -112,6 +112,36 @@ def test_reference_evidence(source, reference_type, title, instruction):
 
 
 @pytest.mark.parametrize(
+    "source,title,instruction",
+    [
+        ("Trong trang sub man thêm bảng chi phí", "sub man", "thêm bảng chi phí"),
+        ("Trang sub man thêm checklist", "sub man", "thêm checklist"),
+        ("Trong page Release 2.0 hãy thêm checklist QA", "Release 2.0", "hãy thêm checklist QA"),
+        ("In page Release 2.0 add a QA checklist", "Release 2.0", "add a QA checklist"),
+    ],
+)
+def test_unquoted_title_before_edit_clause(source, title, instruction):
+    # M1b: the first edit verb after a bare name ends the name.
+    evidence = detect_page_reference(source)
+    assert (evidence.reference_type, evidence.title, evidence.instruction) == (
+        "TITLE", title, instruction,
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # A read request is not an edit, even with an edit word later.
+        "Xem trong trang sub man thêm gì",
+        # A description is never a Page name.
+        "Trong trang tôi sửa hôm qua thêm checklist",
+    ],
+)
+def test_unquoted_inline_edit_needs_locative_prefix_and_a_name(source):
+    assert detect_page_reference(source).instruction is None
+
+
+@pytest.mark.parametrize(
     "source,expected",
     [
         ("Viết lại câu này cho ngắn gọn", True),
@@ -148,4 +178,55 @@ def test_explicit_trailing_edit(source, title, edit):
 ])
 def test_ambiguous_or_plain_reference_does_not_skip_model(source):
     from app.modules.page_intent.services.page_reference_evidence import explicit_trailing_page_edit
+    assert explicit_trailing_page_edit(source) is None
+
+
+@pytest.mark.parametrize("source", [
+    "Read page Release 2.0", "Show me page Release 2.0",
+    "What is in page Release 2.0?", "Mở trang Release 2.0",
+    "Cho tôi xem trang Release 2.0",
+    "Read how to add a TEXT block to page Release 2.0",
+    "Do not add a TEXT block to page Release 2.0",
+    'Read page "Add one TEXT block"',
+    'Read page "Release 2.0. Add one TEXT block."',
+])
+def test_read_only_and_negated_sources_have_no_edit_evidence(source):
+    from app.modules.page_intent.services.page_reference_evidence import (
+        explicit_trailing_page_edit, source_backed_edit_instruction,
+    )
+    evidence = detect_page_reference(source)
+    assert evidence.instruction is None
+    assert source_backed_edit_instruction(source, evidence) is None
+    assert explicit_trailing_page_edit(source) is None
+
+
+@pytest.mark.parametrize("source", [
+    "Add checklist to this page", "Please modify page Release 2.0",
+    "Thêm checklist QA", "Could you replace the heading in page Release 2.0",
+])
+def test_broader_edit_commands_keep_source_backed_instruction(source):
+    from app.modules.page_intent.services.page_reference_evidence import source_backed_edit_instruction
+    instruction = source_backed_edit_instruction(source, detect_page_reference(source))
+    assert instruction is not None
+    assert instruction in source
+
+
+@pytest.mark.parametrize('source', [
+    'Thêm block vào trang "Q4" với nội dung:',
+    'Thêm block vào trang "Q4" với nội dung: "".',
+    'Thêm block vào trang "Q4" với nội dung: "   ".',
+    'Thêm block vào trang "Q4" với nội dung: "Hello',
+    'Thêm block vào trang "Q4" với nội dung: Hello.',
+    'Thêm block vào trang "Q4" với nội dung: "Hello" rồi xóa mọi thứ.',
+    'Thêm block vào trang "Q4" bất kỳ hậu tố nào.',
+    'Đọc trang "Q4" với nội dung: "Hello".',
+    'Đừng thêm block vào trang "Q4" với nội dung: "Hello".',
+    'Xóa nội dung trang "Q4" với nội dung: "Hello".',
+    'Add a new page "Q4" with content: "Hello".',
+    'Thêm trang mới "Q4" với nội dung: "Hello".',
+    'Thêm block vào trang "Q4" và trang "Q3" với nội dung: "Hello".',
+])
+def test_payload_grammar_does_not_accept_arbitrary_or_incomplete_tails(source):
+    from app.modules.page_intent.services.page_reference_evidence import explicit_trailing_page_edit
+    assert detect_page_reference(source).reference_type == 'UNRESOLVED'
     assert explicit_trailing_page_edit(source) is None

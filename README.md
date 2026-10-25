@@ -54,7 +54,12 @@ a real `AI_INTERNAL_TOKEN`. Important settings are:
 - `OLLAMA_TIMEOUT_SECONDS=60`
 - `AI_INTERNAL_TOKEN=<service-to-service secret>`
 
-The development fallback token is rejected when `APP_ENV=production`.
+Both development and production require an explicitly configured token:
+at least 32 printable ASCII characters, at least 12 distinct characters,
+no whitespace, repeated pattern or placeholder text. Generate at least 32
+random bytes and encode as hex or base64url; never use a human-written example.
+Invalid settings fail before providers initialize. Only `APP_ENV=test` permits
+short fixture secrets or an omitted token. Validation errors redact the token.
 For a deterministic local smoke test without Ollama, set `LLM_PROVIDER=fake`.
 
 ## Run the API
@@ -84,6 +89,10 @@ Implemented internal routes:
 ```text
 GET  /internal/v1/health
 POST /internal/v1/writing
+POST /internal/v1/page-composition
+POST /internal/v1/modification-planner
+POST /internal/v1/page-intent
+POST /internal/v1/intent
 ```
 
 Writing accepts an explicit action (`IMPROVE`, `SHORTEN`, `EXPAND`,
@@ -91,6 +100,43 @@ Writing accepts an explicit action (`IMPROVE`, `SHORTEN`, `EXPAND`,
 `language` (`targetLanguage` remains accepted as an input alias). The response
 contains `result`. The internal provider is selected from configuration and the
 default development path calls Ollama over HTTP.
+
+AI inputs are rejected with HTTP 422 rather than truncated:
+
+- Writing text: 1–8000 characters, nonblank.
+- Composition, Planner, Page Intent and M0 Intent instructions: 1–4000 characters, nonblank.
+- M0 optional `selectedText`: 1–8000 characters, nonblank when supplied;
+  optional caller `currentPageId`: 1–128 characters, nonblank when supplied.
+- Structured context: at most 8000 bytes of compact UTF-8 JSON, 12 container
+  levels and 1000 value/container nodes (keys also count toward byte size).
+- Combined instruction/context input: at most 10000 bytes of compact UTF-8
+  JSON, including field names/wrappers; Writing and Page Intent apply this ceiling
+  to their text/instruction JSON string. M0 Intent checks the whole input object.
+  Unicode and escaped text can reach
+  the byte ceiling before the character ceiling.
+- The five AI HTTP endpoints accept at most 65536 body bytes and 13 JSON
+  container levels, enforced on streamed bodies before JSON decoding.
+
+These resource ceilings are based on the default 16384-token context window
+and existing generation budgets. They do not replace model-specific token
+accounting, particularly for smaller custom context windows or repair calls.
+Composition's optional context and existing JSON field/response names are
+preserved. Send only the context required for the operation; oversized input
+must be reduced by the caller without silently changing an editing instruction.
+
+Page Intent only emits editing instructions backed by the original request.
+Read/view/search requests cannot acquire an editing action from model output;
+uncertain language requires clarification. FastAPI creates structured drafts
+only. NestJS remains responsible for Page resolution, permissions and execution.
+
+M0 Intent classifies a natural-language request into `CREATE_PAGE`,
+`MODIFY_PAGE`, `WRITING`, `OTHER` or `UNCLEAR`. It accepts `instruction`,
+optional `selectedText` and optional caller `currentPageId`. It returns the
+existing `result`/`provider`/`model` envelope; `result` contains `intent`,
+`writingAction`, `language` and code-owned `needsClarification`.
+Classification never calls Writing, Page Composition, Page Intent or Planner.
+The model receives only a boolean current-Page indicator, never the caller ID.
+See [M0 Intent contract and verification](M0_INTENT_ROUTER.md) before integration.
 
 ## Run the tests
 
@@ -103,7 +149,10 @@ load model weights, download a model, or require a GPU.
 
 ## Legacy compatibility
 
-`POST /api/v1/assistant` is frozen for compatibility. It still resolves
+`POST /api/v1/assistant` is retained for the documented compatibility contract
+and now requires the same `X-Internal-Service-Token` header as internal routes.
+Requests without a valid token return 401 before invoking the legacy service.
+It still resolves
 `Qwen/Qwen3-1.7B` through the legacy in-process Transformers provider with
 `local_files_only=True`, so calling it requires the model in the local Hugging
 Face cache. New features belong under `/internal/v1` and do not use this legacy

@@ -370,3 +370,40 @@ def test_modification_planner_invalid_llm_output_returns_502(
     }
 
     assert len(provider.calls) == 1
+
+
+def test_modification_planner_validation_error_has_safe_http_logs(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    private = "PRIVATE_HTTP_VALIDATION_FIX04B_73921"
+    provider = FakeLLMProvider([
+        json.dumps({"status": "PLAN_READY", "operationTypes": [private]}),
+    ])
+    client.app.state.modification_planner_service = ModificationPlannerService(provider)
+    payload = make_request_payload()
+    payload["instruction"] = "PRIVATE_HTTP_INSTRUCTION_FIX04B_73921"
+    payload["context"]["page"]["title"] = "PRIVATE_HTTP_CONTEXT_FIX04B_73921"
+    with caplog.at_level("INFO"):
+        response = client.post(
+            "/internal/v1/modification-planner",
+            headers={"X-Internal-Service-Token": TEST_TOKEN},
+            json=payload,
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "AI provider returned an invalid response.",
+    }
+    assert len(provider.calls) == 1
+    for sensitive in (private, payload["instruction"], payload["context"]["page"]["title"]):
+        assert sensitive not in response.text
+        assert sensitive not in caplog.text
+        for record in caplog.records:
+            assert sensitive not in repr(record.__dict__)
+            assert record.exc_info is None
+    assert "input_value" not in caplog.text
+    assert (
+        "modification_planner_invalid_response provider=fake model=fake-model "
+        "error_type=ValidationError"
+    ) in caplog.text

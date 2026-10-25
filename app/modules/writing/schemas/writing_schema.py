@@ -2,6 +2,8 @@ from enum import Enum
 
 from pydantic import AliasChoices, BaseModel, Field, model_validator
 
+from app.shared.request_limits import WritingText
+
 
 class WritingAction(str, Enum):
     IMPROVE = "IMPROVE"
@@ -14,7 +16,7 @@ class WritingAction(str, Enum):
 
 class WritingRequest(BaseModel):
     action: WritingAction
-    text: str = Field(min_length=1)
+    text: WritingText
     language: str | None = Field(
         default=None,
         max_length=100,

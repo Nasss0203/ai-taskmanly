@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -8,7 +8,10 @@ from pydantic import (
     StrictFloat,
     StrictInt,
     StrictStr,
+    model_validator,
 )
+
+from app.shared.request_limits import BoundedContext, Instruction, validate_input_budget
 
 
 PAGE_COMPOSITION_SCHEMA_VERSION = 1
@@ -22,8 +25,13 @@ class PageCompositionBaseModel(BaseModel):
 
 
 class PageCompositionRequest(PageCompositionBaseModel):
-    instruction: str = Field(min_length=1)
-    context: dict[str, Any] | None = None
+    instruction: Instruction
+    context: BoundedContext | None = None
+
+    @model_validator(mode="after")
+    def validate_budget(self) -> "PageCompositionRequest":
+        validate_input_budget({"instruction": self.instruction, "context": self.context})
+        return self
 
 
 class PageCompositionPage(PageCompositionBaseModel):

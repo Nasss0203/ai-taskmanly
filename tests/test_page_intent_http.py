@@ -94,3 +94,28 @@ def test_explicit_named_page_edit_does_not_depend_on_model_output(client):
     }
     assert body["provider"] == "deterministic"
     assert provider.calls == []
+
+
+@pytest.mark.parametrize("instruction", [
+    "Read page Release 2.0", "Show me page Release 2.0",
+    "What is in page Release 2.0?", "Mở trang Release 2.0",
+    "Cho tôi xem trang Release 2.0",
+])
+def test_http_read_only_source_rejects_fabricated_supported_edit(client, instruction):
+    fabricated = {
+        "intent": "MODIFY_PAGE", "referenceType": "TITLE",
+        "pageReference": "Release 2.0", "instruction": "Add one TEXT block",
+        "needsClarification": False,
+    }
+    provider = FakeLLMProvider([json.dumps(fabricated)])
+    client.app.state.page_intent_service = PageIntentService(provider)
+    response = client.post(
+        "/internal/v1/page-intent", json={"instruction": instruction},
+        headers={"X-Internal-Service-Token": TEST_TOKEN},
+    )
+    assert response.status_code == 200
+    assert response.json()["result"] == {
+        "intent": "OTHER", "referenceType": "UNRESOLVED",
+        "pageReference": None, "instruction": None, "needsClarification": False,
+    }
+    assert len(provider.calls) == 1

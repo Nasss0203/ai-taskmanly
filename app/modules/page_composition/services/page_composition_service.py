@@ -83,10 +83,10 @@ class PageCompositionService:
         except PageCompositionSemanticValidationError as exc:
             logger.warning(
                 "page_composition_semantic_validation_failed "
-                "provider=%s model=%s error=%s",
+                "provider=%s model=%s error_type=%s",
                 self.llm_provider.provider_name,
                 self.llm_provider.model_name,
-                str(exc),
+                type(exc).__name__,
             )
 
             repaired_generation = await self._repair_draft(
@@ -113,7 +113,6 @@ class PageCompositionService:
                 TypeError,
             ) as repair_exc:
                 self._raise_invalid_response(
-                    generation=generation,
                     exc=repair_exc,
                 )
 
@@ -123,7 +122,6 @@ class PageCompositionService:
             TypeError,
         ) as exc:
             self._raise_invalid_response(
-                generation=generation,
                 exc=exc,
             )
 
@@ -235,18 +233,15 @@ class PageCompositionService:
 
     def _raise_invalid_response(
         self,
-        generation: LLMGenerationResult,
         exc: Exception,
     ) -> None:
         logger.warning(
             "page_composition_invalid_response "
             "provider=%s model=%s "
-            "error_type=%s error=%s raw_response=%r",
+            "error_type=%s",
             self.llm_provider.provider_name,
             self.llm_provider.model_name,
             type(exc).__name__,
-            str(exc),
-            generation.text,
         )
 
         raise InvalidLLMResponseError(

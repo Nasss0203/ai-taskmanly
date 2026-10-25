@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 
 from app.core.exceptions import InvalidLLMResponseError
@@ -56,6 +56,98 @@ from app.modules.modification_planner.services.modification_planner_service impo
 
 
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
+
+from app.modules.modification_planner.validators.modification_planner_semantic_validator import (
+    ModificationPlannerSemanticValidationError,
+)
+
+
+@pytest.mark.parametrize("failure", ["route", "stage_two", "semantic"])
+def test_invalid_response_logging_excludes_private_content(
+    caplog: pytest.LogCaptureFixture,
+    failure: str,
+) -> None:
+    private = "PRIVATE_VALIDATION_MARKER_FIX04B_73921"
+    instruction = "PRIVATE_INSTRUCTION_FIX04B_73921"
+    context_marker = "PRIVATE_PAGE_CONTEXT_FIX04B_73921"
+    request = make_request(instruction)
+    request.context.page.title = context_marker
+    if failure == "route":
+        route = make_route(private)
+        with pytest.raises(ValidationError) as validation_error:
+            ROUTE_ADAPTER.validate_python(route)
+        assert private in str(validation_error.value)
+        responses = [json.dumps(route)]
+    else:
+        batch = make_database_batch()
+        if failure == "stage_two":
+            batch["operations"][0]["rows"] = private
+        else:
+            batch["operations"][0]["databaseId"] = private
+        responses = [
+            json.dumps(make_route("CREATE_DATABASE_ROWS")),
+            json.dumps(batch),
+        ]
+    provider = FakeLLMProvider(responses)
+    with caplog.at_level("INFO"), pytest.raises(InvalidLLMResponseError) as error:
+        asyncio.run(ModificationPlannerService(provider).process(request))
+
+    cause = error.value.__cause__
+    expected_type = (
+        ModificationPlannerSemanticValidationError
+        if failure == "semantic" else ValidationError
+    )
+    assert isinstance(cause, expected_type)
+    assert private in str(cause)
+    assert str(error.value) == "Modification planner response is invalid."
+    assert len(provider.calls) == (1 if failure == "route" else 2)
+    for sensitive in (private, instruction, context_marker):
+        assert sensitive not in str(error.value)
+        assert sensitive not in caplog.text
+        for record in caplog.records:
+            assert sensitive not in record.getMessage()
+            assert sensitive not in repr(record.__dict__)
+    assert "input_value" not in caplog.text
+    assert str(cause) not in caplog.text
+    warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert warnings[0].getMessage() == (
+        "modification_planner_invalid_response provider=fake model=fake-model "
+        f"error_type={expected_type.__name__}"
+    )
+    assert warnings[0].exc_info is None
+    assert "modification_planner_succeeded" not in caplog.text
+
+
+@pytest.mark.parametrize("stage", ["route", "stage_two"])
+def test_provider_error_logging_excludes_private_message(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    from unittest.mock import AsyncMock
+    from app.core.exceptions import LLMUnavailableError
+
+    private = "PRIVATE_PROVIDER_ERROR_FIX04B_73921"
+    failure = LLMUnavailableError(private)
+    provider = FakeLLMProvider([])
+    outcomes = [failure] if stage == "route" else [
+        LLMGenerationResult(text=json.dumps(make_route("CREATE_DATABASE_ROWS"))),
+        failure,
+    ]
+    generate = AsyncMock(side_effect=outcomes)
+    monkeypatch.setattr(provider, "generate", generate)
+    with caplog.at_level("INFO"), pytest.raises(LLMUnavailableError) as error:
+        asyncio.run(ModificationPlannerService(provider).process(make_request()))
+    assert error.value is failure
+    assert generate.await_count == len(outcomes)
+    assert private not in caplog.text
+    for record in caplog.records:
+        assert private not in repr(record.__dict__)
+        assert record.exc_info is None
+    assert "modification_planner_generation_failed" in caplog.text
+    assert "provider=fake model=fake-model error_type=LLMUnavailableError" in caplog.text
+    assert "modification_planner_succeeded" not in caplog.text
 
 
 ROUTE_ADAPTER = TypeAdapter(ModificationPlannerRoute)

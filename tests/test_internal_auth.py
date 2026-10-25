@@ -32,6 +32,7 @@ def test_lifespan_routes_models_and_closes_providers(
 ) -> None:
     settings = Settings(
         _env_file=None,
+        app_env="test",
         ai_internal_token=TEST_TOKEN,
         llm_provider=mode,
         ollama_model="qwen3:1.7b",
@@ -74,6 +75,7 @@ def test_lifespan_closes_default_when_override_creation_fails(
 ) -> None:
     settings = Settings(
         _env_file=None,
+        app_env="test",
         llm_provider="ollama",
         ollama_model="qwen3:1.7b",
         ollama_continue_model="qwen3:4b-instruct",
@@ -213,3 +215,34 @@ def test_internal_writing_rejects_empty_text(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("token", [None, "wrong-token"])
+def test_legacy_assistant_requires_internal_token(client, monkeypatch, token):
+    process = Mock(return_value={"intent": "GENERAL_CHAT", "data": {}})
+    monkeypatch.setattr(
+        "app.modules.assistant.router.assistant_service.process", process,
+    )
+    response = client.post(
+        "/api/v1/assistant",
+        headers={} if token is None else {"X-Internal-Service-Token": token},
+        json={"message": "Hello"},
+    )
+    assert response.status_code == 401
+    process.assert_not_called()
+
+
+def test_legacy_assistant_retains_authenticated_contract(client, monkeypatch):
+    from app.modules.assistant.intent import AssistantIntent
+
+    payload = {"intent": AssistantIntent.GENERAL_CHAT.value, "data": {"message": "Hello"}}
+    process = Mock(return_value=payload)
+    monkeypatch.setattr("app.modules.assistant.router.assistant_service.process", process)
+    response = client.post(
+        "/api/v1/assistant",
+        headers={"X-Internal-Service-Token": TEST_TOKEN},
+        json={"message": "Hello"},
+    )
+    assert response.status_code == 200
+    assert response.json() == payload
+    process.assert_called_once_with(message="Hello", current_context=None)

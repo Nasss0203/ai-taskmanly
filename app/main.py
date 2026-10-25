@@ -4,11 +4,13 @@ from fastapi import FastAPI
 
 from app.api.internal.v1.router import router as internal_router
 from app.api.v1.router import router
+from app.api.request_limits import AIRequestLimitsMiddleware
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.llm.base import LLMProvider
 from app.llm.factory import create_llm_provider
+from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
 )
@@ -150,6 +152,7 @@ async def lifespan(application: FastAPI):
             )
         )
         application.state.page_intent_service = PageIntentService(provider)
+        application.state.intent_service = IntentService(provider)
 
         yield
 
@@ -161,6 +164,7 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+app.add_middleware(AIRequestLimitsMiddleware)
 
 app.include_router(
     router,

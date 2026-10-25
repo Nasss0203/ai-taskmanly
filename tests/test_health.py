@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_health_contract() -> None:
+def test_health_contract(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
     with TestClient(app) as client:
         response = client.get("/api/v1/health")
 

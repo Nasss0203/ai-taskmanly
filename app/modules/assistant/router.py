@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.dependencies import require_internal_service_token
 from app.modules.assistant.schemas.assistant_schema import (
     AssistantRequest,
     AssistantResponse,
@@ -7,7 +8,7 @@ from app.modules.assistant.schemas.assistant_schema import (
 from app.modules.assistant.services.assistant_service import assistant_service
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_internal_service_token)])
 
 
 @router.post(

@@ -1,19 +1,20 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.shared.request_limits import CurrentPageId, Instruction, validate_input_budget
 
 
 class PageIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    instruction: str = Field(min_length=1, max_length=4000)
+    instruction: Instruction
+    currentPageId: CurrentPageId | None = None
 
-    @field_validator("instruction")
-    @classmethod
-    def require_instruction(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Instruction must not be blank.")
-        return value
+    @model_validator(mode="after")
+    def validate_budget(self) -> "PageIntentRequest":
+        validate_input_budget(self.instruction)
+        return self
 
 
 class PageIntentExtraction(BaseModel):

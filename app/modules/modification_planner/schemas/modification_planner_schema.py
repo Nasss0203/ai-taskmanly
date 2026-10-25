@@ -34,6 +34,12 @@ from pydantic import (
 
 )
 
+from app.shared.request_limits import (
+    MAX_INSTRUCTION_LENGTH,
+    validate_context,
+    validate_input_budget,
+)
+
 
 
 
@@ -464,9 +470,14 @@ class ModificationPlannerRequest(
 
 ):
 
-    instruction: NonBlankString
+    instruction: Annotated[NonBlankString, Field(max_length=MAX_INSTRUCTION_LENGTH)]
 
-    context: AiPageContext
+    context: Annotated[AiPageContext, BeforeValidator(validate_context)]
+
+    @model_validator(mode="after")
+    def validate_budget(self) -> ModificationPlannerRequest:
+        validate_input_budget(self.model_dump(mode="json"))
+        return self
 
 
 

@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import Header, HTTPException, Request, status
 
+from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
 )
@@ -52,3 +53,7 @@ def get_modification_planner_service(
 
 def get_page_intent_service(request: Request) -> PageIntentService:
     return request.app.state.page_intent_service
+
+
+def get_intent_service(request: Request) -> IntentService:
+    return request.app.state.intent_service

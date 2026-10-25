@@ -9,6 +9,28 @@ from app.llm.base import LLMTokenUsage
 from app.llm.providers.ollama import OllamaProvider
 
 
+@pytest.mark.parametrize("status", [400, 500])
+def test_ollama_error_body_never_reaches_logs(caplog, status):
+    from app.core.exceptions import LLMProviderError
+
+    private = "SENSITIVE_UPSTREAM_ERROR_FIXTURE_49371"
+
+    async def run_test():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(status, text=private)),
+            base_url="http://ollama.test",
+        ) as client:
+            provider = OllamaProvider("http://unused.test", "test-model", 1, client)
+            with pytest.raises(LLMProviderError):
+                await provider.generate("system", private)
+
+    with caplog.at_level("INFO"):
+        asyncio.run(run_test())
+    assert private not in caplog.text
+    assert f"status={status}" in caplog.text
+    assert "provider=ollama model=test-model" in caplog.text
+
+
 def test_ollama_provider_calls_chat_api() -> None:
     async def run_test() -> None:
         def handler(request: httpx.Request) -> httpx.Response:

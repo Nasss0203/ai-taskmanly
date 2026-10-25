@@ -506,11 +506,10 @@ class ModificationPlannerService:
         logger.warning(
             "modification_planner_invalid_response "
             "provider=%s model=%s "
-            "error_type=%s error=%s",
+            "error_type=%s",
             self.llm_provider.provider_name,
             self.llm_provider.model_name,
             type(exc).__name__,
-            str(exc),
         )
         raise InvalidLLMResponseError(
             "Modification planner response is invalid."
