@@ -26,8 +26,9 @@ from app.modules.page_intent.services.page_reference_evidence import (
             "CURRENT_PAGE", None, "Thêm checklist",
         ),
         (
+            # M2: the user's own edits name the Page (kế hoạch M2, B1).
             "Thêm checklist vào page tôi sửa hôm qua",
-            "UNRESOLVED", None, "Thêm checklist",
+            "ACTIVITY", None, "Thêm checklist",
         ),
         (
             "Thêm checklist vào trang nói về OAuth",
@@ -63,7 +64,7 @@ from app.modules.page_intent.services.page_reference_evidence import (
         ),
         (
             "Thêm checklist vào trang mà tôi sửa hôm qua",
-            "UNRESOLVED", None, "Thêm checklist",
+            "ACTIVITY", None, "Thêm checklist",
         ),
         (
             'Thêm checklist vào trang "nói về OAuth"',
@@ -104,10 +105,10 @@ from app.modules.page_intent.services.page_reference_evidence import (
     ],
 )
 def test_reference_evidence(source, reference_type, title, instruction):
-    assert detect_page_reference(source) == (
-        detect_page_reference(source).__class__(
-            reference_type, title, instruction
-        )
+    evidence = detect_page_reference(source)
+    # The activity itself is checked in test_activity_reference.py.
+    assert (evidence.reference_type, evidence.title, evidence.instruction) == (
+        reference_type, title, instruction
     )
 
 

@@ -38,7 +38,7 @@ def test_ollama_provider_calls_chat_api() -> None:
 
             assert request.url.path == "/api/chat"
             assert payload["model"] == "qwen3:4b"
-            assert payload["stream"] is False
+            assert payload["stream"] is True
             assert payload["think"] is False
             assert payload["options"]["num_predict"] == 250
 
@@ -252,7 +252,7 @@ def test_ollama_provider_sends_structured_output_schema() -> None:
 
             assert request.url.path == "/api/chat"
             assert payload["model"] == "qwen3:4b"
-            assert payload["stream"] is False
+            assert payload["stream"] is True
             assert payload["think"] is False
 
             assert payload["format"] == response_schema
@@ -288,5 +288,87 @@ def test_ollama_provider_sends_structured_output_schema() -> None:
 
             assert result.text == '{"title":"Sprint Tasks"}'
             assert result.usage is None
+
+    asyncio.run(run_test())
+
+class SlowStream(httpx.AsyncByteStream):
+    """Ollama stream lines, with a pause before each one."""
+
+    def __init__(self, lines: list[dict], pause: float = 0) -> None:
+        self.lines = lines
+        self.pause = pause
+
+    async def __aiter__(self):
+        for line in self.lines:
+            await asyncio.sleep(self.pause)
+            yield (json.dumps(line) + "\n").encode()
+
+
+def stream_provider(stream: httpx.AsyncByteStream, timeout_seconds: float = 1):
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, stream=stream)),
+        base_url="http://ollama.test",
+    )
+    return client, OllamaProvider("http://unused.test", "test-model", timeout_seconds, client)
+
+
+def test_ollama_joins_streamed_lines_and_reads_usage_from_the_last() -> None:
+    lines = [
+        {"message": {"content": '{"a":'}, "done": False},
+        {"message": {"content": " 1}"}, "done": False},
+        {"message": {"content": ""}, "done": True, "prompt_eval_count": 7, "eval_count": 3},
+    ]
+
+    async def run_test() -> None:
+        client, provider = stream_provider(SlowStream(lines))
+        async with client:
+            generation = await provider.generate("system", "user")
+        assert generation.text == '{"a": 1}'
+        assert generation.usage == LLMTokenUsage(7, 3, 10)
+
+    asyncio.run(run_test())
+
+
+def test_ollama_stream_error_line_is_a_provider_error_and_never_logged(caplog) -> None:
+    from app.core.exceptions import LLMProviderError
+
+    private = "SENSITIVE_STREAM_ERROR_FIXTURE_81624"
+    lines = [{"message": {"content": "partial"}, "done": False}, {"error": private}]
+
+    async def run_test() -> None:
+        client, provider = stream_provider(SlowStream(lines))
+        async with client:
+            with pytest.raises(LLMProviderError):
+                await provider.generate("system", "user")
+
+    with caplog.at_level("INFO"):
+        asyncio.run(run_test())
+    assert private not in caplog.text
+    assert "reason=stream_error" in caplog.text
+
+
+def test_ollama_total_timeout_caps_a_reply_that_keeps_streaming() -> None:
+    from app.core.exceptions import LLMTimeoutError
+
+    # Every line arrives quickly, but the whole reply takes too long.
+    lines = [{"message": {"content": "x"}, "done": False}] * 20
+
+    async def run_test() -> None:
+        client, provider = stream_provider(SlowStream(lines, pause=0.02), timeout_seconds=0.1)
+        async with client:
+            with pytest.raises(LLMTimeoutError):
+                await provider.generate("system", "user")
+
+    asyncio.run(run_test())
+
+
+def test_ollama_idle_timeout_never_exceeds_the_total_timeout() -> None:
+    async def run_test() -> None:
+        provider = OllamaProvider("http://ollama.test", "m", 30, idle_timeout_seconds=60)
+        assert provider._client.timeout.read == 30
+        await provider.close()
+        provider = OllamaProvider("http://ollama.test", "m", 300, idle_timeout_seconds=60)
+        assert provider._client.timeout.read == 60
+        await provider.close()
 
     asyncio.run(run_test())

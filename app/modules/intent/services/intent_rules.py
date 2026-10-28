@@ -4,6 +4,9 @@ import re
 import unicodedata
 
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
+from app.modules.modification_planner.services.block_delete import parse_block_delete
+from app.modules.modification_planner.services.block_text import parse_block_text
+from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.modules.page_intent.services.page_reference_evidence import (
     PAGE_MARKER, QUOTED_TEXT, detect_page_reference, is_read_only_page_request,
     has_multiple_page_targets, mask_quoted_text, source_backed_edit_instruction,
@@ -13,6 +16,25 @@ from app.modules.page_intent.services.page_reference_evidence import (
 def fold(text: str) -> str:
     text = unicodedata.normalize('NFD', text).casefold().replace('đ', 'd')
     return ''.join(char for char in text if unicodedata.category(char) != 'Mn')
+
+
+# Folding merges words that differ only by marks: "đích" (goal), "táo"
+# (apple) and "đội" (team) are not "dịch", "tạo" or "đổi". Such a word keeps
+# a "_" so no command pattern matches it; unmarked words still match.
+VERB_SPELLINGS = {
+    'dich': ('dịch',), 'tao': ('tạo',), 'xoa': ('xoá', 'xóa'), 'sua': ('sửa',),
+    'chinh': ('chỉnh',), 'doi': ('đổi',), 'bo': ('bỏ', 'bổ'), 'go': ('gỡ',),
+    'thay': ('thay',), 'them': ('thêm',), 'chen': ('chèn',), 'tich': ('tích',),
+}
+
+
+def mark_other_words(source: str) -> str:
+    def word(match: re.Match[str]) -> str:
+        written = match.group().casefold()
+        folded = fold(written)
+        spellings = VERB_SPELLINGS.get(folded)
+        return f'{folded}_' if spellings and written != folded and written not in spellings else match.group()
+    return re.sub(r'\w+', word, unicodedata.normalize('NFC', source))
 
 
 def command_text(source: str) -> str:
@@ -29,11 +51,14 @@ ACTION_PATTERNS: tuple[tuple[WritingActionName, str], ...] = (
     ('EXPAND', r'viet dai hon|chi tiet hon|them vi du minh hoa cho doan nay|elaborate|expand'),
     ('SUMMARIZE', r'tom tat|tom lai y chinh|tl;dr|liet ke \d+ y chinh|summarize'),
     ('CONTINUE', r'viet tiep|continue'),
-    ('TRANSLATE', r'dich|translate|sang tieng|(?:english|japanese|korean|vietnamese|french) please'),
+    ('TRANSLATE', r'dich(?!\s+vu\b)|translate|sang tieng|(?:english|japanese|korean|vietnamese|french) please'),
 )
 EDIT_COMMAND = re.compile(
     r'^(?:them|chen|sua|chinh|cap nhat|doi|xoa|bo sung|ghi|viet lai|rut gon|dich|chep|'
-    r'add|insert|edit|update|remove|delete|modify|change|replace|rename|append|prepend|move|reorder|rewrite|shorten|translate|copy)\b',
+    r'add|insert|edit|update|remove|delete|modify|change|replace|rename|append|prepend|move|reorder|rewrite|shorten|translate|copy|'
+    # Kế hoạch tích to-do: ticking and unticking existing to-dos.
+    r'tich(?!\s+(?:hop|cuc)\b)|danh dau|bo tich|bo danh dau|hoan thanh|lam xong|'
+    r'check(?!\s+list\b)|uncheck|mark|complete|finish)\b',
 )
 CREATE_COMMAND = re.compile(r'^(?:tao|create|make|new page|lap ke hoach|soan tai lieu)\b')
 LANGUAGES = {
@@ -151,13 +176,19 @@ def edit_evidence(request: IntentRequest) -> bool:
     evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
     if source_backed_edit_instruction(source, evidence):
         return True
+    # "gửi email xong rồi" names the to-do first; there is no leading verb.
+    # "thay X bằng Y" and "bỏ / gỡ X" use verbs EDIT_COMMAND lacks.
+    if (parse_todo_status(source) is not None or parse_block_text(source) is not None
+            or parse_block_delete(source) is not None):
+        return True
     # Support explicit accent-free commands without trusting model instructions.
     command = EDIT_COMMAND.match(directive_text(source))
     return bool(command and directive_text(source)[command.end():].strip())
 
 
 def multiple_commands(source: str) -> bool:
-    text = directive_text(source)
+    # "tích A và Đích đến": a name after "và" is not a command (VERB_SPELLINGS).
+    text = directive_text(mark_other_words(source))
     markers = list(PAGE_MARKER.finditer(text))
     if len(markers) > 1 and re.search(r'\b(?:va|and)\s+(?:trang|page)\b', text):
         return True
@@ -200,9 +231,14 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     if is_page_summary(source) or is_read_only(source) or unsupported_request(source):
         return result('OTHER')
     text = directive_text(source)
+    has_page = bool(PAGE_MARKER.search(text))
+    # "tạo bản ghi xong rồi, trong trang X" ticks a to-do: decided before creation.
+    if has_page and parse_todo_status(source) is not None:
+        evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
+        missing_current = evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId
+        return result('MODIFY_PAGE', clarify=missing_current or evidence.reference_type == 'UNRESOLVED')
     if creation_evidence(source) and CREATE_COMMAND.match(text):
         return result('CREATE_PAGE')
-    has_page = bool(PAGE_MARKER.search(text))
     action = writing_action(source)
     if has_page and edit_evidence(request):
         evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))

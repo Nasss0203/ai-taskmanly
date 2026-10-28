@@ -1,5 +1,7 @@
 from __future__ import annotations
 import logging
+import re
+import unicodedata
 from time import perf_counter
 from typing import Any, NoReturn
 from pydantic import TypeAdapter, ValidationError
@@ -21,6 +23,8 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiPageContext,
     ChecklistInsertBlocksOperationBatch,
     ChecklistMixedModificationOperationBatch,
+    ChecklistWithHeadingInsertBlocksOperationBatch,
+    ChecklistWithHeadingMixedModificationOperationBatch,
     CreateDatabaseRowsOperationBatch,
     InsertBlocksOperationBatch,
     MixedModificationOperationBatch,
@@ -35,6 +39,14 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
     validate_modification_plan_semantics,
 )
 from app.shared.json_parser import parse_json_object
+from app.modules.modification_planner.services.block_delete import plan_block_delete
+from app.modules.modification_planner.services.block_text import plan_block_text
+from app.modules.modification_planner.services.todo_status import (
+    TODO_STATUS_MODEL,
+    TODO_STATUS_PROVIDER,
+    plan_todo_status,
+)
+from app.shared.list_markers import has_list_marker, strip_list_marker
 logger = logging.getLogger(__name__)
 PLAN_ADAPTER = TypeAdapter(AiModificationPlan)
 ROUTE_ADAPTER = TypeAdapter(
@@ -57,11 +69,21 @@ MIXED_OPERATIONS_BATCH_ADAPTER = TypeAdapter(
 CHECKLIST_MIXED_OPERATIONS_BATCH_ADAPTER = TypeAdapter(
     ChecklistMixedModificationOperationBatch,
 )
+CHECKLIST_WITH_HEADING_INSERT_BLOCKS_BATCH_ADAPTER = TypeAdapter(
+    ChecklistWithHeadingInsertBlocksOperationBatch,
+)
+CHECKLIST_WITH_HEADING_MIXED_OPERATIONS_BATCH_ADAPTER = TypeAdapter(
+    ChecklistWithHeadingMixedModificationOperationBatch,
+)
 NEED_MORE_CONTEXT_DETAILS_ADAPTER = TypeAdapter(
     ModificationNeedMoreContextDetails,
 )
 ROUTER_MAX_NEW_TOKENS = 256
+BLOCK_TEXT_MODEL = "block-text-v1"
+BLOCK_DELETE_MODEL = "block-delete-v1"
 GENERATION_MAX_NEW_TOKENS = 1200
+
+HEADING_INTENT_TERMS = ("heading", "header", "tiêu đề", "đề mục")
 
 CHECKLIST_INTENT_TERMS = (
     "checklist",
@@ -70,6 +92,12 @@ CHECKLIST_INTENT_TERMS = (
     "todo",
     "to-do",
 )
+
+# "checklist gồm a, b và c" -> items a, b, c.
+CHECKLIST_ITEMS_LEAD = re.compile(r"^\s*(?:bao gồm|gồm|là|với)?\s*:?\s*")
+CHECKLIST_ITEM_SEPARATOR = re.compile(r"\s*(?:[,;]|\bvà\b)\s*")
+
+
 class ModificationPlannerService:
     def __init__(
         self,
@@ -80,6 +108,22 @@ class ModificationPlannerService:
         self,
         request: ModificationPlannerRequest,
     ) -> ModificationPlannerResponse:
+        # Ticks, text edits and deletes of existing blocks are matched by rules,
+        # never by the model (kế hoạch tích to-do, sửa chữ block, xoá block).
+        for plan_by_rules, model in (
+            (plan_todo_status, TODO_STATUS_MODEL),
+            (plan_block_text, BLOCK_TEXT_MODEL),
+            (plan_block_delete, BLOCK_DELETE_MODEL),
+        ):
+            rule_plan = plan_by_rules(request.instruction, request.context)
+            if rule_plan is not None:
+                validate_modification_plan_semantics(rule_plan, request.context)
+                logger.info("modification_planner_rules model=%s status=%s", model, rule_plan.status)
+                return ModificationPlannerResponse(
+                    result=rule_plan,
+                    provider=TODO_STATUS_PROVIDER,
+                    model=model,
+                )
         context_payload = self._serialize_context(
             request.context,
         )
@@ -118,10 +162,13 @@ class ModificationPlannerService:
                 route=route,
                 generation=stage_two_generation,
             )
+            plan = self._reanchor_non_toggle_parents(plan, request.context)
             validate_modification_plan_semantics(
                 plan,
                 request.context,
             )
+            plan = self._checklist_items_as_todos(plan, request.instruction)
+            plan = self._strip_todo_list_markers(plan)
         except (
             ModificationPlannerSemanticValidationError,
             ValueError,
@@ -223,16 +270,9 @@ class ModificationPlannerService:
                     context=context_payload,
                 )
             )
-            if self._requires_checklist_todo_schema(
+            response_schema = self._insert_blocks_adapter(
                 request.instruction,
-            ):
-                response_schema = (
-                    CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
-                )
-            else:
-                response_schema = (
-                    INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
-                )
+            ).json_schema()
             return await self._generate(
                 stage="insert_blocks",
                 system_prompt=system_prompt,
@@ -269,16 +309,9 @@ class ModificationPlannerService:
                     context=context_payload,
                 )
             )
-            if self._requires_checklist_todo_schema(
+            response_schema = self._mixed_operations_adapter(
                 request.instruction,
-            ):
-                response_schema = (
-                    CHECKLIST_MIXED_OPERATIONS_BATCH_ADAPTER.json_schema()
-                )
-            else:
-                response_schema = (
-                    MIXED_OPERATIONS_BATCH_ADAPTER.json_schema()
-                )
+            ).json_schema()
             return await self._generate(
                 stage="mixed_operations",
                 system_prompt=system_prompt,
@@ -329,20 +362,9 @@ class ModificationPlannerService:
         if operation_types == {
             "INSERT_BLOCKS",
         }:
-            if self._requires_checklist_todo_schema(
+            batch = self._insert_blocks_adapter(
                 request.instruction,
-            ):
-                batch = (
-                    CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER.validate_python(
-                        raw_result,
-                    )
-                )
-            else:
-                batch = (
-                    INSERT_BLOCKS_BATCH_ADAPTER.validate_python(
-                        raw_result,
-                    )
-                )
+            ).validate_python(raw_result)
 
             operations = [
                 operation.model_dump(
@@ -370,20 +392,9 @@ class ModificationPlannerService:
             "CREATE_DATABASE_ROWS",
             "INSERT_BLOCKS",
         }:
-            if self._requires_checklist_todo_schema(
+            batch = self._mixed_operations_adapter(
                 request.instruction,
-            ):
-                batch = (
-                    CHECKLIST_MIXED_OPERATIONS_BATCH_ADAPTER.validate_python(
-                        raw_result,
-                    )
-                )
-            else:
-                batch = (
-                    MIXED_OPERATIONS_BATCH_ADAPTER.validate_python(
-                        raw_result,
-                    )
-                )
+            ).validate_python(raw_result)
 
             database_operations = [
                 operation.model_dump(
@@ -426,6 +437,105 @@ class ModificationPlannerService:
         return PLAN_ADAPTER.validate_python(
             plan_payload,
         )
+    @staticmethod
+    def _reanchor_non_toggle_parents(plan: Any, context: Any) -> Any:
+        # Only a TOGGLE holds children. Models name a TEXT/HEADER as parent to
+        # mean "under this line": insert right after it, at its own level.
+        blocks = {block.id: block for block in context.blocks}
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        changed = False
+        for operation in data.get("operations") or []:
+            parent = blocks.get(operation.get("parentBlockId") or "")
+            if operation.get("type") != "INSERT_BLOCKS" or parent is None or parent.type == "TOGGLE":
+                continue
+            operation["parentBlockId"] = parent.parentBlockId
+            operation["afterBlockId"] = parent.id
+            changed = True
+        return type(plan).model_validate(data) if changed else plan
+
+    @staticmethod
+    def _checklist_items_as_todos(plan: Any, instruction: str) -> Any:
+        # With a heading allowed, models also render listed checklist items as HEADER.
+        items = ModificationPlannerService._listed_checklist_items(instruction)
+        if not items:
+            return plan
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        changed = False
+        for operation in data.get("operations") or []:
+            for index, block in enumerate(operation.get("blocks") or []):
+                text = (block.get("content") or {}).get("text")
+                if (
+                    block.get("type") == "HEADER"
+                    and isinstance(text, str)
+                    and ModificationPlannerService._checklist_item_key(text) in items
+                ):
+                    operation["blocks"][index] = {
+                        "type": "TODO",
+                        "content": {"text": strip_list_marker(text), "checked": False},
+                    }
+                    changed = True
+        return type(plan).model_validate(data) if changed else plan
+
+    @staticmethod
+    def _listed_checklist_items(instruction: str) -> set[str]:
+        normalized_instruction = unicodedata.normalize("NFC", instruction).casefold()
+        positions = [
+            normalized_instruction.rfind(term) + len(term)
+            for term in CHECKLIST_INTENT_TERMS
+            if term in normalized_instruction
+        ]
+        if not positions:
+            return set()
+        listed = CHECKLIST_ITEMS_LEAD.sub("", normalized_instruction[max(positions):], count=1)
+        return {
+            key
+            for item in CHECKLIST_ITEM_SEPARATOR.split(listed)
+            if (key := ModificationPlannerService._checklist_item_key(item))
+        }
+
+    @staticmethod
+    def _checklist_item_key(text: str) -> str:
+        key = strip_list_marker(unicodedata.normalize("NFC", text)).strip().rstrip(".!").strip()
+        return key.casefold()
+
+    @staticmethod
+    def _strip_todo_list_markers(plan: Any) -> Any:
+        # A TODO is one list item; models still prefix "1.", "2." to its text.
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        changed = False
+        for operation in data.get("operations") or []:
+            for block in operation.get("blocks") or []:
+                content = block.get("content")
+                if (
+                    block.get("type") == "TODO"
+                    and isinstance(content, dict)
+                    and isinstance(content.get("text"), str)
+                    and has_list_marker(content["text"])
+                ):
+                    content["text"] = strip_list_marker(content["text"])
+                    changed = True
+        return type(plan).model_validate(data) if changed else plan
+
+    def _insert_blocks_adapter(self, instruction: str) -> TypeAdapter[Any]:
+        # A checklist forces TODO items; a requested heading keeps its HEADER.
+        if not self._requires_checklist_todo_schema(instruction):
+            return INSERT_BLOCKS_BATCH_ADAPTER
+        if self._requests_heading(instruction):
+            return CHECKLIST_WITH_HEADING_INSERT_BLOCKS_BATCH_ADAPTER
+        return CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER
+
+    def _mixed_operations_adapter(self, instruction: str) -> TypeAdapter[Any]:
+        if not self._requires_checklist_todo_schema(instruction):
+            return MIXED_OPERATIONS_BATCH_ADAPTER
+        if self._requests_heading(instruction):
+            return CHECKLIST_WITH_HEADING_MIXED_OPERATIONS_BATCH_ADAPTER
+        return CHECKLIST_MIXED_OPERATIONS_BATCH_ADAPTER
+
+    @staticmethod
+    def _requests_heading(instruction: str) -> bool:
+        normalized_instruction = instruction.casefold()
+        return any(term in normalized_instruction for term in HEADING_INTENT_TERMS)
+
     def _requires_checklist_todo_schema(
         self,
         instruction: str,

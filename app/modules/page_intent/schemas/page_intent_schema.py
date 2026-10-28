@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.shared.request_limits import CurrentPageId, Instruction, validate_input_budget
 
@@ -67,9 +67,42 @@ class PageIntentExtraction(BaseModel):
         return self
 
 
+class PageActivity(BaseModel):
+    """How the user named the Page: by their own edits (M2). Words only, no dates."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    relative: Literal["LATEST", "TODAY", "YESTERDAY", "N_DAYS_AGO", "LAST_WEEK", "RECENT"]
+    days: int | None = Field(ge=1, le=30)
+    titleHint: str | None = Field(min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_days(self) -> "PageActivity":
+        if (self.relative == "N_DAYS_AGO") != (self.days is not None):
+            raise ValueError("Only N_DAYS_AGO carries a number of days.")
+        return self
+
+
+class ActivityPageIntent(BaseModel):
+    """MODIFY_PAGE of a Page named by activity. Never produced by the model:
+    only the deterministic rules return it, and NestJS always asks the user
+    to confirm the Page it finds."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    intent: Literal["MODIFY_PAGE"]
+    referenceType: Literal["ACTIVITY"]
+    pageReference: None
+    instruction: str = Field(min_length=1)
+    needsClarification: Literal[False]
+    activity: PageActivity
+
+
 class PageIntentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    result: PageIntentExtraction
+    # ActivityPageIntent adds the "activity" key; every other result keeps
+    # exactly the five keys of PageIntentExtraction (the model's schema).
+    result: PageIntentExtraction | ActivityPageIntent
     provider: str
     model: str

@@ -233,11 +233,18 @@ def test_same_page_mixed_supported_operations_remain_modification():
 
 
 def test_unresolved_or_missing_current_page_requires_clarification():
-    for source in ('Thêm checklist vào trang tôi sửa hôm qua', 'Thêm checklist vào trang này',
+    for source in ('Thêm checklist vào trang tôi muốn', 'Thêm checklist vào trang này',
                    'Sửa trang có pageId 123abc'):
         response, _ = run(source)
         assert response.result.intent == 'MODIFY_PAGE'
         assert response.result.needsClarification
+
+
+def test_a_page_named_by_my_edits_is_a_page_edit():
+    # M2: NestJS finds the Page from activities and asks to confirm it.
+    response, _ = run('Thêm checklist vào trang tôi sửa hôm qua')
+    assert response.result.intent == 'MODIFY_PAGE'
+    assert not response.result.needsClarification
 
 
 def test_maximum_text_lengths_are_preserved_without_truncation():
@@ -321,3 +328,56 @@ def test_planning_questions_and_missing_subject_do_not_authorize_creation(source
         IntentExtraction.model_validate(extraction('CREATE_PAGE')), IntentRequest(instruction=source),
     )
     assert result.intent in ('OTHER', 'UNCLEAR')
+
+# Kế hoạch tích to-do: every phrasing is a Page edit, recognised without the model.
+@pytest.mark.parametrize('source,context,intent', [
+    ('tích gửi email trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('đánh dấu cập nhật báo cáo là đã xong ở trang sub man', {}, 'MODIFY_PAGE'),
+    ('đánh dấu đã hoàn thành phần gửi email ở trang sub man', {}, 'MODIFY_PAGE'),
+    ('hoàn thành gửi email trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('làm xong in tài liệu và đặt phòng ở trang sub man', {}, 'MODIFY_PAGE'),
+    ('gửi email xong rồi, trong trang sub man', {}, 'MODIFY_PAGE'),
+    # A to-do named "Tạo …" is ticked, not a Page created.
+    ('tạo bản ghi xong rồi, trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('bỏ tích in tài liệu trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('đánh dấu gửi email là chưa xong ở trang sub man', {}, 'MODIFY_PAGE'),
+    ('check "Gửi email" on sub man page', {}, 'MODIFY_PAGE'),
+    ('tích gửi email', {'currentPageId': 'caller-id'}, 'MODIFY_PAGE'),
+    ('tích gửi email', {}, 'UNCLEAR'),
+])
+def test_todo_ticks_are_page_edits(source, context, intent):
+    result, provider = run(source, **context)
+    assert result.result.intent == intent
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize('source,intent', [
+    ('Tạo trang họp tuần', 'CREATE_PAGE'),
+    ('Tạo trang Q4 rồi thêm checklist vào trang Q3', 'UNCLEAR'),
+])
+def test_tick_rules_leave_other_requests_alone(source, intent):
+    result, provider = run(source)
+    assert result.result.intent == intent
+    assert provider.calls == []
+
+
+def test_names_first_tick_without_a_page_needs_an_open_page():
+    result, _ = run('báo cáo tuần xong rồi')
+    assert result.result.intent == 'UNCLEAR'
+    result, _ = run('báo cáo tuần xong rồi', currentPageId='caller-id')
+    assert result.result.intent == 'MODIFY_PAGE'
+
+
+# Kế hoạch sửa chữ block: text edits are Page edits, recognised without the model.
+@pytest.mark.parametrize('source,context,intent', [
+    ('đổi heading Việc tuần sau thành Việc tháng sau trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('doi tuan sau thanh thang sau o trang sub man', {}, 'MODIFY_PAGE'),
+    ('thay "in tài liệu" bằng "in tài liệu họp" trong trang sub man', {}, 'MODIFY_PAGE'),
+    ('change "Gửi email" to "Send email" on sub man page', {}, 'MODIFY_PAGE'),
+    ('sửa tuần sau thành tháng sau', {'currentPageId': 'caller-id'}, 'MODIFY_PAGE'),
+])
+def test_block_text_edits_are_page_edits(source, context, intent):
+    result, provider = run(source, **context)
+    assert result.result.intent == intent
+    assert provider.calls == []
+

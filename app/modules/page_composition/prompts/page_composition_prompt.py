@@ -34,6 +34,9 @@ KHÔNG được bỏ qua bất kỳ field root nào ở trên.
 - "page" luôn bắt buộc.
 - "page.title" luôn bắt buộc và phải là string.
 - Nếu người dùng không chỉ định title, hãy tự tạo title ngắn gọn từ yêu cầu.
+- Nếu yêu cầu đã nêu tên trang (ví dụ "Tạo trang họp tuần", "Tạo page "Q4""),
+  page.title phải giữ đúng các từ đó (chỉ viết hoa chữ cái đầu), ví dụ "Họp tuần",
+  "Q4". Không thêm, bớt hoặc đổi từ.
 - "blocks" luôn bắt buộc. Nếu không có block thì dùng [].
 - "databases" luôn bắt buộc.
 - Nếu không cần database thì BẮT BUỘC trả:
@@ -137,6 +140,25 @@ Với TODO:
     "databaseRef": "...",
     "viewRef": "..."
   }
+
+CHỌN LOẠI BLOCK:
+
+- Việc cần làm, nhiệm vụ, checklist, danh sách công việc, mục cần hoàn thành
+  → mỗi mục là MỘT block TODO ("checked": false).
+- Không dùng TOGGLE cho nhiệm vụ hoặc checklist. TOGGLE chỉ dùng cho một mục
+  có nội dung con cần thu gọn/mở rộng (các block con dùng parentRef).
+- Không đánh số "1.", "2." trong content.text của TODO; thứ tự block đã là thứ tự.
+- Tiêu đề phần → HEADER; đoạn mô tả → TEXT; trích dẫn → QUOTE.
+
+ĐỘ DÀI TRANG:
+
+- Trang mới phải gọn: tối đa 12 block ở cấp ngoài cùng.
+- Nếu người dùng tự liệt kê nhiều mục hơn thì giữ đủ các mục đó.
+- Mục người dùng tự liệt kê phải giữ nguyên chữ (chỉ viết hoa chữ cái đầu),
+  không thêm hay bớt từ.
+- Mỗi TEXT tối đa 2 câu ngắn. Không lặp lại ý.
+- FAQ / hỏi đáp: tối đa 5 câu hỏi. Mỗi câu hỏi là một HEADER, câu trả lời là
+  một TEXT ngắn ngay sau. Câu hỏi không phải việc cần làm, không dùng TODO.
 
 Nếu block có parentRef:
 - parentRef phải trỏ tới một block TOGGLE tồn tại.

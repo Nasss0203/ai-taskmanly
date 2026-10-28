@@ -31,6 +31,8 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
 
     ChecklistMixedModificationOperationBatch,
 
+    ChecklistWithHeadingInsertBlocksOperationBatch,
+
     CreateDatabaseRowsOperationBatch,
 
     InsertBlocksOperationBatch,
@@ -159,6 +161,13 @@ INSERT_BLOCKS_BATCH_ADAPTER = TypeAdapter(InsertBlocksOperationBatch)
 CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER = TypeAdapter(
 
     ChecklistInsertBlocksOperationBatch,
+
+)
+
+
+CHECKLIST_WITH_HEADING_INSERT_BLOCKS_BATCH_ADAPTER = TypeAdapter(
+
+    ChecklistWithHeadingInsertBlocksOperationBatch,
 
 )
 
@@ -2371,3 +2380,112 @@ def test_modification_planner_does_not_mutate_request_context() -> None:
 
 
     )
+
+
+def test_modification_planner_strips_list_markers_from_todo_text() -> None:
+    # The model numbered TODO items ("1. ...") although blocks keep the order.
+    batch = make_insert_batch()
+    batch["operations"][0]["blocks"] = [
+        {"type": "TODO", "content": {"text": "1. Verify production deployment", "checked": False}},
+        {"type": "TODO", "content": {"text": "- Notify the team", "checked": False}},
+    ]
+    provider = FakeLLMProvider([
+        json.dumps(make_route("INSERT_BLOCKS"), ensure_ascii=False),
+        json.dumps(batch, ensure_ascii=False),
+    ])
+    response = asyncio.run(
+        ModificationPlannerService(provider).process(
+            make_request("Add a checklist item under Details."),
+        ),
+    )
+    texts = [block.content["text"] if isinstance(block.content, dict) else block.content.text
+             for block in response.result.operations[0].blocks]
+    assert texts == ["Verify production deployment", "Notify the team"]
+
+
+def test_modification_planner_reanchors_a_non_toggle_parent_after_that_block() -> None:
+    # The model used a TEXT block as parent; the validator rejected it (HTTP 502).
+    context = make_context()
+    text_block = next(block for block in context["blocks"] if block["type"] != "TOGGLE")
+    batch = make_insert_batch()
+    batch["operations"][0]["parentBlockId"] = text_block["id"]
+    batch["operations"][0]["afterBlockId"] = text_block["id"]
+    provider = FakeLLMProvider([
+        json.dumps(make_route("INSERT_BLOCKS"), ensure_ascii=False),
+        json.dumps(batch, ensure_ascii=False),
+    ])
+    response = asyncio.run(
+        ModificationPlannerService(provider).process(
+            make_request("Add a checklist item under Details."),
+        ),
+    )
+    operation = response.result.operations[0]
+    assert operation.parentBlockId == text_block["parentBlockId"]
+    assert operation.afterBlockId == text_block["id"]
+
+
+def run_insert_plan(instruction: str, blocks: list[dict[str, Any]]):
+    batch = make_insert_batch()
+    # Root insert, as in the live gp06 output (parentBlockId must survive normalization).
+    batch["operations"][0].update(parentBlockId=None, afterBlockId="block-toggle", blocks=blocks)
+    provider = FakeLLMProvider([
+        json.dumps(make_route("INSERT_BLOCKS"), ensure_ascii=False),
+        json.dumps(batch, ensure_ascii=False),
+    ])
+    response = asyncio.run(ModificationPlannerService(provider).process(make_request(instruction)))
+    return response, provider
+
+
+HEADING_AND_CHECKLIST = "thêm heading Việc tuần sau và checklist gồm cập nhật báo cáo, gửi email"
+
+
+def test_heading_and_checklist_keeps_the_heading() -> None:
+    # gp06: the TODO-only checklist schema turned the requested heading into a TODO.
+    response, provider = run_insert_plan(HEADING_AND_CHECKLIST, [
+        {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},
+        {"type": "TODO", "content": {"text": "Cập nhật báo cáo", "checked": False}},
+        {"type": "TODO", "content": {"text": "Gửi email", "checked": False}},
+    ])
+    assert [block.type for block in response.result.operations[0].blocks] == ["HEADER", "TODO", "TODO"]
+    assert provider.calls[1]["response_schema"] == CHECKLIST_WITH_HEADING_INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
+
+
+def test_checklist_without_heading_still_requires_todo_only() -> None:
+    _, provider = run_insert_plan("thêm checklist gồm cập nhật báo cáo", [
+        {"type": "TODO", "content": {"text": "Cập nhật báo cáo", "checked": False}},
+    ])
+    assert provider.calls[1]["response_schema"] == CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
+
+
+def test_heading_and_checklist_still_rejects_toggle_items() -> None:
+    with pytest.raises(InvalidLLMResponseError):
+        run_insert_plan(HEADING_AND_CHECKLIST, [
+            {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},
+            {"type": "TOGGLE", "content": {"text": "Cập nhật báo cáo"}},
+        ])
+
+
+def test_heading_and_checklist_turns_listed_items_into_todos() -> None:
+    # Live gp06 output: the model rendered the listed checklist items as HEADER level 3.
+    response, _ = run_insert_plan(HEADING_AND_CHECKLIST, [
+        {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},
+        {"type": "HEADER", "content": {"text": "Cập nhật báo cáo"}, "styleConfig": {"level": 3}},
+        {"type": "HEADER", "content": {"text": "2. Gửi email."}, "styleConfig": {"level": 3}},
+    ])
+    blocks = response.result.operations[0].blocks
+    assert [block.type for block in blocks] == ["HEADER", "TODO", "TODO"]
+    assert [block.content.text for block in blocks] == ["Việc tuần sau", "Cập nhật báo cáo", "Gửi email."]
+    assert blocks[1].content.checked is False
+
+
+def test_normalizers_keep_headers_without_style_config() -> None:
+    # Re-validating a dumped plan must not send styleConfig=null back in.
+    response, _ = run_insert_plan(HEADING_AND_CHECKLIST, [
+        {"type": "HEADER", "content": {"text": "Việc tuần sau"}},
+        {"type": "HEADER", "content": {"text": "Cập nhật báo cáo"}},
+        {"type": "TODO", "content": {"text": "1. Gửi email", "checked": False}},
+    ])
+    blocks = response.result.operations[0].blocks
+    assert [(block.type, block.content.text) for block in blocks] == [
+        ("HEADER", "Việc tuần sau"), ("TODO", "Cập nhật báo cáo"), ("TODO", "Gửi email"),
+    ]

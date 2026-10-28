@@ -195,6 +195,8 @@ CHECKLIST / TODO:
 - Nếu user dùng "checklist", "check list" hoặc "task list":
   BẮT BUỘC biểu diễn checklist bằng TODO block.
 - Không được dùng TOGGLE thay cho checklist.
+- Nếu user yêu cầu cả heading/tiêu đề và checklist: heading là HEADER đứng trước,
+  chỉ các item checklist là TODO; tất cả nằm trong cùng một INSERT_BLOCKS.
 - Nếu user chỉ nêu chủ đề checklist mà không liệt kê từng item:
   tạo đúng một TODO giữ nguyên ý nghĩa trực tiếp của chủ đề.
 - TODO của checklist dùng checked=false trừ khi user nói rõ item đã hoàn thành.
@@ -228,6 +230,10 @@ NỘI DUNG:
 
 - content.text phải có nội dung, không chỉ whitespace.
 
+- Mọi block tạo ra phải là nội dung MỚI theo yêu cầu. Không sao chép, lặp lại
+
+  hoặc chuyển đổi (ví dụ đổi TOGGLE thành TODO) block đã có trong context.blocks.
+
 
 
 BATCH:
@@ -238,9 +244,11 @@ BATCH:
 
   vị trí insert khác nhau.
 
-- Nếu nhiều block cùng một vị trí, ưu tiên gom vào cùng một operation theo
+- Các block mới nằm liền nhau tại cùng vị trí (cùng parentBlockId và
 
-  đúng thứ tự user yêu cầu.
+  afterBlockId) BẮT BUỘC nằm trong MỘT operation, theo đúng thứ tự user yêu cầu.
+
+  Không tách mỗi block thành một operation riêng.
 
 """.strip()
 
@@ -509,6 +517,8 @@ INSERT_BLOCKS:
 - Nếu user dùng "checklist", "check list" hoặc "task list":
   BẮT BUỘC biểu diễn checklist bằng TODO block.
 - Không được dùng TOGGLE thay cho checklist.
+- Nếu user yêu cầu cả heading/tiêu đề và checklist: heading là HEADER đứng trước,
+  chỉ các item checklist là TODO; tất cả nằm trong cùng một INSERT_BLOCKS.
 - Nếu user chỉ nêu chủ đề checklist mà không liệt kê từng item:
   tạo đúng một TODO giữ nguyên ý nghĩa trực tiếp của chủ đề.
 - TODO của checklist dùng checked=false trừ khi user nói rõ item đã hoàn thành.
@@ -518,7 +528,11 @@ INSERT_BLOCKS:
 
 - Nếu user chỉ cung cấp chủ đề checklist, không tự bịa thêm task detail.
 
-- Nếu nhiều block cùng một vị trí, ưu tiên gom vào cùng một operation.
+- Các block mới tại cùng vị trí (cùng parentBlockId và afterBlockId) BẮT BUỘC
+
+  nằm trong MỘT INSERT_BLOCKS operation; không tách mỗi block một operation.
+
+- Không sao chép, lặp lại hoặc chuyển đổi block đã có trong context.blocks.
 
 
 

@@ -161,7 +161,7 @@ def test_page_composition_returns_valid_draft() -> None:
     assert len(database.rows) == 1
 
     assert len(provider.calls) == 1
-    assert provider.calls[0]["max_new_tokens"] == 4000
+    assert provider.calls[0]["max_new_tokens"] == 2000
 
     assert provider.calls[0]["response_schema"] == (
         PageCompositionDraft.model_json_schema()
@@ -411,7 +411,7 @@ def test_page_composition_repairs_semantically_invalid_draft() -> None:
         PageCompositionDraft.model_json_schema()
     )
 
-    assert provider.calls[1]["max_new_tokens"] == 4000
+    assert provider.calls[1]["max_new_tokens"] == 2000
 
     assert (
         "Page Composition Draft trước đó không hợp lệ."

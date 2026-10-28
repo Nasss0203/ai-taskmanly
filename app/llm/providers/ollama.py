@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 from time import perf_counter
 from typing import Any
@@ -27,16 +29,22 @@ class OllamaProvider:
         client: httpx.AsyncClient | None = None,
         num_ctx: int | None = None,
         num_gpu: int | None = None,
+        idle_timeout_seconds: float | None = None,
     ) -> None:
         self.model_name = model_name
         self._num_ctx = num_ctx
         self._num_gpu = num_gpu
 
+        # The reply is streamed: a long page may take minutes while tokens
+        # keep coming, but a silent model fails after the idle timeout.
+        # timeout_seconds still caps the whole request.
+        self._timeout_seconds = timeout_seconds
+
         self._owns_client = client is None
 
         self._client = client or httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            timeout=timeout_seconds,
+            timeout=min(idle_timeout_seconds or timeout_seconds, timeout_seconds),
         )
 
     async def generate(
@@ -82,7 +90,7 @@ class OllamaProvider:
                     "content": user_prompt,
                 },
             ],
-            "stream": False,
+            "stream": True,
             "think": False,
             "options": {
                 "num_predict": max_new_tokens,
@@ -100,14 +108,12 @@ class OllamaProvider:
             payload["options"]["temperature"] = 0
 
         try:
-            response = await self._client.post(
-                "/api/chat",
-                json=payload,
+            content, final = await asyncio.wait_for(
+                self._stream_chat(payload),
+                timeout=self._timeout_seconds,
             )
 
-            response.raise_for_status()
-
-        except httpx.TimeoutException as exc:
+        except (httpx.TimeoutException, asyncio.TimeoutError) as exc:
             self._log_failure(
                 started_at,
                 "timeout",
@@ -150,9 +156,14 @@ class OllamaProvider:
                 "Cannot connect to Ollama."
             ) from exc
 
-        try:
-            data = response.json()
-            content = data["message"]["content"]
+        except LLMProviderError:
+            # An error line inside the stream; its text is never logged.
+            self._log_failure(
+                started_at,
+                "stream_error",
+            )
+
+            raise
 
         except (ValueError, KeyError, TypeError) as exc:
             self._log_failure(
@@ -164,7 +175,7 @@ class OllamaProvider:
                 "Ollama response does not contain message content."
             ) from exc
 
-        if not isinstance(content, str) or not content.strip():
+        if not content.strip():
             self._log_failure(
                 started_at,
                 "empty_response",
@@ -182,8 +193,8 @@ class OllamaProvider:
             (perf_counter() - started_at) * 1000,
         )
 
-        prompt_tokens = data.get("prompt_eval_count")
-        completion_tokens = data.get("eval_count")
+        prompt_tokens = final.get("prompt_eval_count")
+        completion_tokens = final.get("eval_count")
 
         usage = None
 
@@ -205,6 +216,50 @@ class OllamaProvider:
             text=content,
             usage=usage,
         )
+
+    async def _stream_chat(
+        self,
+        payload: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
+        """The streamed message content and the last line (token counts)."""
+        parts: list[str] = []
+        final: dict[str, Any] = {}
+
+        async with self._client.stream(
+            "POST",
+            "/api/chat",
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+
+                chunk = json.loads(line)
+
+                if not isinstance(chunk, dict):
+                    raise TypeError("Ollama stream line is not an object.")
+
+                if "error" in chunk:
+                    raise LLMProviderError(
+                        "Ollama reported an error while generating."
+                    )
+
+                if "message" in chunk:
+                    piece = chunk["message"]["content"]
+
+                    if not isinstance(piece, str):
+                        raise TypeError("Ollama message content is not text.")
+
+                    parts.append(piece)
+
+                final = chunk
+
+        if not parts:
+            raise KeyError("message")
+
+        return "".join(parts), final
 
     async def close(self) -> None:
         if self._owns_client:

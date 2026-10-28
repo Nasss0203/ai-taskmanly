@@ -19,6 +19,7 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionResponse,
     PageCompositionUsage,
 )
+from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.validators import (
     PageCompositionSemanticValidationError,
     validate_page_composition_semantics,
@@ -27,6 +28,10 @@ from app.shared.json_parser import parse_json_object
 
 
 logger = logging.getLogger(__name__)
+
+# A compact page (about 12 blocks, or a 20-row table) fits well within this;
+# every token costs time on a model that runs partly on the CPU.
+MAX_NEW_TOKENS = 2000
 
 
 class PageCompositionService:
@@ -59,7 +64,7 @@ class PageCompositionService:
             generation = await self.llm_provider.generate(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_new_tokens=4000,
+                max_new_tokens=MAX_NEW_TOKENS,
                 response_schema=response_schema,
             )
         except Exception as exc:
@@ -134,7 +139,7 @@ class PageCompositionService:
         )
 
         return PageCompositionResponse(
-            result=draft,
+            result=normalize_task_blocks(draft, request.instruction),
             provider=self.llm_provider.provider_name,
             model=self.llm_provider.model_name,
             usage=(
@@ -193,7 +198,7 @@ class PageCompositionService:
             generation = await self.llm_provider.generate(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_new_tokens=4000,
+                max_new_tokens=MAX_NEW_TOKENS,
                 response_schema=response_schema,
             )
         except Exception as exc:

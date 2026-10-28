@@ -743,11 +743,44 @@ class InsertBlocksOperation(
 
 
 
+class DeleteBlockOperation(ModificationPlannerBaseModel):
+    # Kế hoạch xoá block: one block and everything nested in it (soft delete).
+    # text and childCount must match the page, so nothing unseen is deleted.
+    type: Literal["DELETE_BLOCK"]
+    blockId: NonBlankString
+    text: NonBlankString
+    childCount: Annotated[StrictInt, Field(ge=0)]
+
+
+class SetBlockTextOperation(ModificationPlannerBaseModel):
+    # Kế hoạch sửa chữ block: only content.text of one existing block changes.
+    # oldText must equal the block's current text; newText replaces it.
+    type: Literal["SET_BLOCK_TEXT"]
+    blockId: NonBlankString
+    oldText: NonBlankString
+    newText: Annotated[NonBlankString, Field(max_length=2000)]
+
+
+class SetTodoCheckedOperation(ModificationPlannerBaseModel):
+    # Kế hoạch tích to-do: only the checkbox of an existing TODO changes.
+    # text is shown in the draft and must equal the block's current text.
+    type: Literal["SET_TODO_CHECKED"]
+    blockId: NonBlankString
+    text: NonBlankString
+    checked: StrictBool
+
+
 AiModificationOperation = Annotated[
 
     CreateDatabaseRowsOperation
 
-    | InsertBlocksOperation,
+    | InsertBlocksOperation
+
+    | SetTodoCheckedOperation
+
+    | SetBlockTextOperation
+
+    | DeleteBlockOperation,
 
     Field(discriminator="type"),
 
@@ -807,6 +840,29 @@ class ChecklistInsertBlocksOperation(
         list[TodoBlockInput],
         Field(min_length=1),
     ]
+
+
+# A checklist under a requested heading: HEADER and TODO only (no TOGGLE/TEXT).
+ChecklistWithHeadingBlockInput = Annotated[
+    HeaderBlockInput | TodoBlockInput,
+    Field(discriminator="type"),
+]
+
+
+class ChecklistWithHeadingInsertBlocksOperation(ModificationPlannerBaseModel):
+    type: Literal["INSERT_BLOCKS"]
+    parentBlockId: NonBlankString | None
+    afterBlockId: NonBlankString | None
+    blocks: Annotated[list[ChecklistWithHeadingBlockInput], Field(min_length=1)]
+
+
+class ChecklistWithHeadingInsertBlocksOperationBatch(ModificationPlannerBaseModel):
+    operations: Annotated[list[ChecklistWithHeadingInsertBlocksOperation], Field(min_length=1)]
+
+
+class ChecklistWithHeadingMixedModificationOperationBatch(ModificationPlannerBaseModel):
+    createDatabaseRowsOperations: Annotated[list[CreateDatabaseRowsOperation], Field(min_length=1)]
+    insertBlocksOperations: Annotated[list[ChecklistWithHeadingInsertBlocksOperation], Field(min_length=1)]
 
 
 class ChecklistInsertBlocksOperationBatch(

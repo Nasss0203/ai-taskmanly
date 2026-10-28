@@ -51,7 +51,9 @@ a real `AI_INTERNAL_TOKEN`. Important settings are:
 - `LLM_PROVIDER=ollama`
 - `OLLAMA_BASE_URL=http://localhost:11434`
 - `OLLAMA_MODEL=qwen3:4b`
-- `OLLAMA_TIMEOUT_SECONDS=60`
+- `OLLAMA_TIMEOUT_SECONDS=240` (whole streamed request; keep it below the
+  backend's `AI_SERVICE_TIMEOUT_MS`)
+- `OLLAMA_IDLE_TIMEOUT_SECONDS=60` (longest silence while streaming)
 - `AI_INTERNAL_TOKEN=<service-to-service secret>`
 
 Both development and production require an explicitly configured token:

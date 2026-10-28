@@ -42,7 +42,10 @@ class Settings(BaseSettings):
         ge=0,
     )
 
+    # Whole request (replies are streamed), and the longest silence between
+    # two streamed lines: a model that stops sending tokens fails early.
     ollama_timeout_seconds: float = 60.0
+    ollama_idle_timeout_seconds: float = Field(default=60.0, gt=0)
 
     @model_validator(mode="before")
     @classmethod

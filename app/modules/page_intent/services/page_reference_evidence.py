@@ -10,8 +10,12 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
+from app.modules.modification_planner.services.block_delete import parse_block_delete
+from app.modules.modification_planner.services.block_text import parse_block_text
+from app.modules.modification_planner.services.todo_status import parse_todo_status
 
-ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED"]
+
+ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY"]
 
 PAGE_MARKER = re.compile(r"(?<!\w)(?:page|trang)(?!\w)", re.IGNORECASE)
 CURRENT_REFERENCE = re.compile(
@@ -76,6 +80,21 @@ STANDALONE_WRITING = re.compile(
 QUOTED_TEXT = re.compile(r'''(?<!\w)(?:"[^"]*"|'[^']*'|`[^`]*`|“[^”]*”|‘[^’]*’)''')
 
 
+def is_edit_clause(text: str) -> bool:
+    """An affirmative edit command, a to-do tick or a block text edit.
+
+    Ticks may lead with the to-do's name ("gửi email xong rồi"), and ticks and
+    text edits ("doi X thanh Y", "thay X bằng Y") may be typed without marks,
+    so EDIT_VERB alone cannot recognise them.
+    """
+    return (
+        bool(EDIT_VERB.match(text))
+        or parse_todo_status(text) is not None
+        or parse_block_text(text) is not None
+        or parse_block_delete(text) is not None
+    )
+
+
 def mask_quoted_text(source: str) -> str:
     """Quoted titles/source text are data, not new Page markers or commands."""
     return QUOTED_TEXT.sub(lambda match: " " * len(match.group()), source)
@@ -97,6 +116,8 @@ class PageReferenceEvidence:
     reference_type: ReferenceType
     title: str | None
     instruction: str | None
+    # Only for ACTIVITY: the user's own edits that name the Page (M2).
+    activity: "ActivityReference | None" = None
 
 
 def _source_instruction(source: str, marker_start: int) -> str | None:
@@ -106,7 +127,7 @@ def _source_instruction(source: str, marker_start: int) -> str | None:
     if not match:
         return None
     edit = match.group("edit").strip()
-    return edit if EDIT_VERB.match(edit) else None
+    return edit if is_edit_clause(edit) else None
 
 
 def source_backed_edit_instruction(
@@ -124,7 +145,7 @@ def source_backed_edit_instruction(
     text = unicodedata.normalize("NFC", source).strip()
     markers = _target_markers(text)
     prefix = text[:markers[0].start()].strip() if markers else text
-    if not EDIT_VERB.match(prefix):
+    if not is_edit_clause(prefix):
         return None
     if re.search(r"\b(?:about|về)\s*$", prefix, re.IGNORECASE):
         return None
@@ -240,10 +261,14 @@ def detect_page_reference(
     normalized = unicodedata.normalize("NFC", source).strip()
     markers = _target_markers(normalized)
 
+    activity = activity_page_reference(normalized)
+    if activity is not None:
+        return PageReferenceEvidence("ACTIVITY", None, activity[0], activity[1])
+
     if not markers:
         command = EDIT_VERB.match(normalized)
-        if (has_current_page and command and normalized[command.end():].strip()
-                and not is_standalone_writing_request(normalized)):
+        edit = (command and normalized[command.end():].strip()) or parse_todo_status(normalized)
+        if has_current_page and edit and not is_standalone_writing_request(normalized):
             return PageReferenceEvidence("CURRENT_PAGE", None, normalized)
         return PageReferenceEvidence("UNRESOLVED", None, None)
 
@@ -279,7 +304,7 @@ def detect_page_reference(
         following = CURRENT_REFERENCE.match(remainder)
         tail = remainder[following.end():].lstrip(" ,;:.")
         if (not normalized[:marker.start()].strip()
-                and EDIT_VERB.match(tail)):
+                and is_edit_clause(tail)):
             return PageReferenceEvidence("CURRENT_PAGE", None, tail)
         # Only an exact current-page phrase is strong evidence.
         if re.fullmatch(
@@ -365,3 +390,86 @@ def detect_page_reference(
         return PageReferenceEvidence("UNRESOLVED", None, instruction)
 
     return PageReferenceEvidence("TITLE", title, instruction)
+
+
+# M2 (kế hoạch tìm theo hoạt động, B1): "… vào trang [gợi ý] tôi sửa hôm qua"
+# names a Page by the user's own edits, not by its title. Only the words are
+# taken here; NestJS turns the time into dates in the user's time zone.
+ActivityRelative = Literal["LATEST", "TODAY", "YESTERDAY", "N_DAYS_AGO", "LAST_WEEK", "RECENT"]
+MAX_ACTIVITY_DAYS = 30
+MAX_HINT_WORDS = 5
+
+
+@dataclass(frozen=True)
+class ActivityReference:
+    relative: ActivityRelative
+    days: int | None = None
+    title_hint: str | None = None
+
+
+ACTIVITY_VI = re.compile(
+    r"^(?P<edit>.+?)\s+(?:vào|trong|ở|trên|tại|cho)\s+(?:trang|page)\s+"
+    r"(?:(?P<hint>.+?)\s+)?(?:(?:mà|do)\s+)?(?:tôi|mình|em)\s+"
+    r"(?P<just>(?:(?:vừa|mới|đã)\s+)*)(?:chỉnh sửa|sửa|chỉnh|cập nhật|viết)"
+    r"(?:\s+(?P<time>.+?))?$",
+    re.IGNORECASE | re.DOTALL,
+)
+ACTIVITY_EN = re.compile(
+    r"^(?P<edit>.+?)\s+(?:to|in|on|into)\s+(?:the\s+)?(?:(?P<hint>.+?)\s+)?page\s+"
+    r"(?:that\s+)?i\s+(?P<just>(?:(?:last|just|recently)\s+)*)"
+    r"(?:edited|updated|changed|modified|worked on)(?:\s+(?P<time>.+?))?$",
+    re.IGNORECASE | re.DOTALL,
+)
+ACTIVITY_TIMES: tuple[tuple[re.Pattern[str], ActivityRelative], ...] = (
+    (re.compile(r"^(?:gần đây nhất|gần nhất|lần cuối|lần gần nhất|mới nhất|cuối cùng|most recently|last)$"), "LATEST"),
+    (re.compile(r"^(?:hôm nay|today)$"), "TODAY"),
+    (re.compile(r"^(?:hôm qua|yesterday)$"), "YESTERDAY"),
+    (re.compile(r"^(?:tuần trước|last week)$"), "LAST_WEEK"),
+    (re.compile(r"^(?:gần đây|dạo này|recently|lately)$"), "RECENT"),
+)
+DAYS_AGO = re.compile(r"^(?P<days>\d{1,2})\s+(?:ngày trước|days? ago)$")
+ACTIVITY_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+
+
+def _activity_time(time: str | None, just: str) -> ActivityReference | None:
+    words = normalize(" ".join((time or "").split()))
+    adverbs = normalize(just).split()
+    if not words:
+        # "trang tôi vừa sửa" / "the page I last edited": the latest one.
+        if {"vừa", "mới", "last", "just"} & set(adverbs):
+            return ActivityReference("LATEST")
+        if "recently" in adverbs:
+            return ActivityReference("RECENT")
+        return None
+    if words == "hôm kia":
+        return ActivityReference("N_DAYS_AGO", 2)
+    days = DAYS_AGO.match(words)
+    if days:
+        count = int(days.group("days"))
+        return ActivityReference("N_DAYS_AGO", count) if 1 <= count <= MAX_ACTIVITY_DAYS else None
+    for pattern, relative in ACTIVITY_TIMES:
+        if pattern.match(words):
+            return ActivityReference(relative)
+    return None
+
+
+def activity_page_reference(source: str) -> tuple[str, ActivityReference] | None:
+    """The edit clause and the activity a sentence names its Page by, if any."""
+    text = ACTIVITY_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
+    if len(_target_markers(text)) != 1:
+        return None
+    for pattern in (ACTIVITY_VI, ACTIVITY_EN):
+        match = pattern.match(text)
+        if not match:
+            continue
+        edit = match.group("edit").strip()
+        reference = _activity_time(match.group("time"), match.group("just") or "")
+        if reference is None or not is_edit_clause(edit):
+            return None
+        # "trang mà tôi sửa": "mà" / "do" only joins the clause, it names nothing.
+        hint = re.sub(r"(?:^|\s+)(?:mà|do|that)$", "", (match.group("hint") or "").strip(), flags=re.IGNORECASE)
+        hint = hint.strip().strip("\"'“”‘’`").strip()
+        if hint and len(hint.split()) > MAX_HINT_WORDS:
+            return None
+        return edit, ActivityReference(reference.relative, reference.days, hint or None)
+    return None

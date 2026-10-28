@@ -771,3 +771,15 @@ def test_mixed_prompt_forces_checklist_to_todo() -> None:
         "TOGGLE chỉ dùng khi user thực sự yêu cầu toggle"
         in MIXED_OPERATIONS_SYSTEM_PROMPT
     )
+
+def test_insert_blocks_prompt_forbids_copying_existing_blocks() -> None:
+    # "Thêm checklist" once copied the Page's existing tasks as TODO blocks.
+    assert "phải là nội dung MỚI theo yêu cầu" in INSERT_BLOCKS_SYSTEM_PROMPT
+    assert "Không sao chép, lặp lại" in INSERT_BLOCKS_SYSTEM_PROMPT
+    assert "Không sao chép, lặp lại hoặc chuyển đổi block" in MIXED_OPERATIONS_SYSTEM_PROMPT
+
+
+def test_prompts_require_one_operation_per_insert_position() -> None:
+    for prompt in (INSERT_BLOCKS_SYSTEM_PROMPT, MIXED_OPERATIONS_SYSTEM_PROMPT):
+        assert "BẮT BUỘC" in prompt
+        assert "không tách mỗi block" in prompt.lower()

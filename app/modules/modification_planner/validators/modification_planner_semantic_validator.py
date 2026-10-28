@@ -11,8 +11,11 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiPageContextDatabase,
     AiPageContextDatabaseProperty,
     CreateDatabaseRowsOperation,
+    DeleteBlockOperation,
     InsertBlocksOperation,
     ModificationContextRequest,
+    SetBlockTextOperation,
+    SetTodoCheckedOperation,
 )
 
 
@@ -65,7 +68,38 @@ def validate_modification_plan_semantics(
             f"{context.page.id}",
         )
 
+    changed_block_ids: set[str] = set()
+
     for operation in plan.operations:
+        if isinstance(operation, (SetTodoCheckedOperation, SetBlockTextOperation, DeleteBlockOperation)):
+            if operation.blockId in changed_block_ids:
+                _fail(
+                    f"Block {operation.blockId} "
+                    "is changed more than once",
+                )
+            changed_block_ids.add(operation.blockId)
+
+        if isinstance(operation, DeleteBlockOperation):
+            _validate_delete_block(
+                operation,
+                context,
+            )
+            continue
+
+        if isinstance(operation, SetBlockTextOperation):
+            _validate_set_block_text(
+                operation,
+                context,
+            )
+            continue
+
+        if isinstance(operation, SetTodoCheckedOperation):
+            _validate_set_todo_checked(
+                operation,
+                context,
+            )
+            continue
+
         if isinstance(operation, CreateDatabaseRowsOperation):
             _validate_create_database_rows(
                 operation,
@@ -84,6 +118,15 @@ def validate_modification_plan_semantics(
             "Unsupported modification operation returned "
             "after schema validation",
         )
+
+    deleted = [operation.blockId for operation in plan.operations if isinstance(operation, DeleteBlockOperation)]
+    for block_id in deleted:
+        nested = {block.id for block in _descendants(block_id, context)}
+        if nested.intersection(deleted):
+            _fail(
+                f"Block {block_id} is deleted with a block nested in it; "
+                "one operation already removes both",
+            )
 
     if plan.status == "NEED_MORE_CONTEXT":
         for request in plan.contextRequests:
@@ -238,6 +281,121 @@ def _validate_option_id(
         _fail(
             f"Option {option_id} does not belong to "
             f"property {property_.id}",
+        )
+
+
+EDITABLE_TEXT_BLOCK_TYPES = frozenset({"TEXT", "HEADER", "QUOTE", "TODO", "TOGGLE"})
+
+
+def _descendants(
+    block_id: str,
+    context: AiPageContext,
+) -> list[AiPageContextBlock]:
+    found: list[AiPageContextBlock] = []
+    pending = [block_id]
+    while pending:
+        parent = pending.pop()
+        for block in context.blocks:
+            if block.parentBlockId == parent:
+                found.append(block)
+                pending.append(block.id)
+    return found
+
+
+def _validate_delete_block(
+    operation: DeleteBlockOperation,
+    context: AiPageContext,
+) -> None:
+    block = _find_block(
+        context,
+        operation.blockId,
+    )
+
+    if block is None:
+        _fail(
+            f"Block {operation.blockId} "
+            "is not available in the current page context",
+        )
+
+    if block.type not in EDITABLE_TEXT_BLOCK_TYPES:
+        _fail(
+            f"Block {operation.blockId} cannot be deleted by the assistant",
+        )
+
+    content = block.content if isinstance(block.content, dict) else {}
+    if content.get("text") != operation.text:
+        _fail(
+            f"Block {operation.blockId} text does not match "
+            "the current page context",
+        )
+
+    # Nothing nested may be deleted unseen.
+    if len(_descendants(operation.blockId, context)) != operation.childCount:
+        _fail(
+            f"Block {operation.blockId} childCount does not match "
+            "the current page context",
+        )
+
+
+def _validate_set_block_text(
+    operation: SetBlockTextOperation,
+    context: AiPageContext,
+) -> None:
+    block = _find_block(
+        context,
+        operation.blockId,
+    )
+
+    if block is None:
+        _fail(
+            f"Block {operation.blockId} "
+            "is not available in the current page context",
+        )
+
+    if block.type not in EDITABLE_TEXT_BLOCK_TYPES:
+        _fail(
+            f"Block {operation.blockId} has no editable text",
+        )
+
+    content = block.content if isinstance(block.content, dict) else {}
+    if content.get("text") != operation.oldText:
+        _fail(
+            f"Block {operation.blockId} text does not match "
+            "the current page context",
+        )
+
+    if operation.newText == operation.oldText:
+        _fail(
+            f"Block {operation.blockId} text is not changed",
+        )
+
+
+def _validate_set_todo_checked(
+    operation: SetTodoCheckedOperation,
+    context: AiPageContext,
+) -> None:
+    block = _find_block(
+        context,
+        operation.blockId,
+    )
+
+    if block is None:
+        _fail(
+            f"To-do {operation.blockId} "
+            "is not available in the current page context",
+        )
+
+    if block.type != "TODO":
+        _fail(
+            f"Block {operation.blockId} is not a to-do",
+        )
+
+    # text is only shown in the draft; it may never rename the to-do.
+    content = block.content if isinstance(block.content, dict) else {}
+    if content.get("text") != operation.text:
+        _fail(
+            f"To-do {operation.blockId} text does not match "
+            "the current page context",
         )
 
 

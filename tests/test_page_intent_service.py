@@ -50,7 +50,7 @@ def result(
             ),
         ),
         (
-            "Thêm checklist vào page tôi sửa hôm qua",
+            "Thêm checklist vào page tôi muốn",
             result(
                 reference_type="UNRESOLVED",
                 page_reference=None,
@@ -501,3 +501,43 @@ def test_ambiguous_source_cannot_borrow_model_edit_instruction():
     response = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction="Page Release 2.0?")))
     assert response.result.intent == "UNCLEAR"
     assert response.result.instruction is None
+
+UNCLEAR = result(intent="UNCLEAR", reference_type="UNRESOLVED", page_reference=None,
+                 instruction=None, needs_clarification=True)
+
+
+# Kế hoạch tích to-do: qwen3:1.7b answered UNCLEAR for these on the real Ask AI page.
+@pytest.mark.parametrize("source,instruction", [
+    ("tích gửi email trong trang sub man", "tích gửi email"),
+    ("tich gui email trong trang sub man", "tich gui email"),
+    ("đánh dấu đã hoàn thành phần gửi email ở trang sub man", "đánh dấu đã hoàn thành phần gửi email"),
+    ("hoàn thành gửi email trong trang sub man", "hoàn thành gửi email"),
+    ("gửi email xong rồi, trong trang sub man", "gửi email xong rồi,"),
+    ("bỏ tích in tài liệu trong trang sub man", "bỏ tích in tài liệu"),
+])
+def test_grounds_todo_ticks_the_model_left_unclear(source, instruction):
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)])
+    actual = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert actual.result.model_dump() == result(page_reference="sub man", instruction=instruction)
+
+
+def test_tick_on_the_open_page_is_grounded_to_it():
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)])
+    actual = asyncio.run(PageIntentService(provider).process(
+        PageIntentRequest(instruction="tích gửi email", currentPageId="page-1")))
+    assert actual.result.model_dump() == result(
+        reference_type="CURRENT_PAGE", page_reference=None, instruction="tích gửi email")
+
+
+# Kế hoạch sửa chữ block: unaccented and "thay … bằng …" edits are grounded too.
+@pytest.mark.parametrize("source,instruction", [
+    ("đổi heading Việc tuần sau thành Việc tháng sau trong trang sub man",
+     "đổi heading Việc tuần sau thành Việc tháng sau"),
+    ("doi tuan sau thanh thang sau trong trang sub man", "doi tuan sau thanh thang sau"),
+    ("thay in tài liệu bằng in tài liệu họp trong trang sub man", "thay in tài liệu bằng in tài liệu họp"),
+])
+def test_grounds_block_text_edits_the_model_left_unclear(source, instruction):
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)])
+    actual = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert actual.result.model_dump() == result(page_reference="sub man", instruction=instruction)
+

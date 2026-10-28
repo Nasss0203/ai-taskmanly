@@ -6,11 +6,13 @@ from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
 from app.modules.page_intent.prompts.page_intent_prompt import SYSTEM_PROMPT
 from app.modules.page_intent.schemas.page_intent_schema import (
+    ActivityPageIntent,
     PageIntentExtraction,
     PageIntentRequest,
     PageIntentResponse,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
+    activity_page_reference,
     detect_page_reference,
     explicit_trailing_page_edit,
     is_standalone_writing_request,
@@ -40,6 +42,27 @@ class PageIntentService:
         # A delimited, explicitly named Page followed by a clear edit clause
         # needs no model inference. This also avoids unstable OTHER/UNCLEAR
         # classifications and exhausted JSON retries for this narrow syntax.
+        # M2: "… vào trang tôi sửa hôm qua" names the Page by the user's own
+        # edits. Only these rules recognise it; the model never returns it.
+        activity = activity_page_reference(request.instruction)
+        if activity is not None:
+            instruction, reference = activity
+            return PageIntentResponse(
+                result=ActivityPageIntent.model_validate({
+                    "intent": "MODIFY_PAGE",
+                    "referenceType": "ACTIVITY",
+                    "pageReference": None,
+                    "instruction": instruction,
+                    "needsClarification": False,
+                    "activity": {
+                        "relative": reference.relative,
+                        "days": reference.days,
+                        "titleHint": reference.title_hint,
+                    },
+                }),
+                provider="deterministic",
+                model="activity-page-reference-v1",
+            )
         explicit = explicit_trailing_page_edit(request.instruction)
         if explicit is not None:
             return PageIntentResponse(

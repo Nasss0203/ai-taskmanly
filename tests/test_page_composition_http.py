@@ -90,7 +90,7 @@ def test_page_composition_returns_generated_draft(
 }
 
     assert len(provider.calls) == 1
-    assert provider.calls[0]["max_new_tokens"] == 4000
+    assert provider.calls[0]["max_new_tokens"] == 2000
 
 
 def test_page_composition_returns_usage(
