@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = 60.0
     ollama_idle_timeout_seconds: float = Field(default=60.0, gt=0)
 
+    # M5 (kế hoạch hạ tầng vector): Page text vectors. The CPU by default
+    # (num_gpu 0), so the chat model keeps the 4 GB GPU.
+    ollama_embedding_model: str = "qwen3-embedding:0.6b"
+    ollama_embedding_num_gpu: int | None = Field(default=0, ge=0)
+    ollama_embedding_timeout_seconds: float = Field(default=60.0, gt=0)
+
     @model_validator(mode="before")
     @classmethod
     def protect_token_in_validation_errors(cls, values: Any) -> Any:

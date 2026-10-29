@@ -9,7 +9,8 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.llm.base import LLMProvider
-from app.llm.factory import create_llm_provider
+from app.llm.factory import create_embedding_provider, create_llm_provider
+from app.modules.embedding.services.embedding_service import EmbeddingService
 from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
@@ -153,6 +154,12 @@ async def lifespan(application: FastAPI):
         )
         application.state.page_intent_service = PageIntentService(provider)
         application.state.intent_service = IntentService(provider)
+
+        embedding_provider = create_embedding_provider(settings)
+        exit_stack.push_async_callback(embedding_provider.close)
+        application.state.embedding_service = EmbeddingService(
+            embedding_provider
+        )
 
         yield
 

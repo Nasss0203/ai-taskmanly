@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import Header, HTTPException, Request, status
 
+from app.modules.embedding.services.embedding_service import EmbeddingService
 from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
@@ -57,3 +58,7 @@ def get_page_intent_service(request: Request) -> PageIntentService:
 
 def get_intent_service(request: Request) -> IntentService:
     return request.app.state.intent_service
+
+
+def get_embedding_service(request: Request) -> EmbeddingService:
+    return request.app.state.embedding_service

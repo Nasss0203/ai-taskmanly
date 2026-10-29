@@ -1,6 +1,7 @@
+import hashlib
 from typing import Any
 
-from app.llm.base import LLMGenerationResult
+from app.llm.base import EmbeddingResult, LLMGenerationResult
 
 
 class FakeLLMProvider:
@@ -24,6 +25,28 @@ class FakeLLMProvider:
     ) -> LLMGenerationResult:
         return LLMGenerationResult(
             text=self.response,
+        )
+
+    async def close(self) -> None:
+        return None
+
+
+class FakeEmbeddingProvider:
+    """Deterministic vectors for local smoke tests: same text, same vector."""
+
+    provider_name = "fake"
+    model_name = "fake-embedding"
+
+    def __init__(self, dimensions: int = 8) -> None:
+        self.dimensions = dimensions
+
+    async def embed(self, texts: list[str]) -> EmbeddingResult:
+        return EmbeddingResult(
+            embeddings=[
+                [byte / 255 + 0.01 for byte in hashlib.sha256(text.encode()).digest()[: self.dimensions]]
+                for text in texts
+            ],
+            model=self.model_name,
         )
 
     async def close(self) -> None:

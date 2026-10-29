@@ -15,7 +15,7 @@ from app.modules.modification_planner.services.block_text import parse_block_tex
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 
 
-ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY"]
+ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY", "DESCRIPTION"]
 
 PAGE_MARKER = re.compile(r"(?<!\w)(?:page|trang)(?!\w)", re.IGNORECASE)
 CURRENT_REFERENCE = re.compile(
@@ -118,6 +118,10 @@ class PageReferenceEvidence:
     instruction: str | None
     # Only for ACTIVITY: the user's own edits that name the Page (M2).
     activity: "ActivityReference | None" = None
+    # Only for TITLE: where that Page is, an ancestor Page or a teamspace (M4).
+    scope: "PageScope | None" = None
+    # Only for DESCRIPTION: what the Page is for, in the user's words (M6).
+    description: str | None = None
 
 
 def _source_instruction(source: str, marker_start: int) -> str | None:
@@ -264,6 +268,16 @@ def detect_page_reference(
     activity = activity_page_reference(normalized)
     if activity is not None:
         return PageReferenceEvidence("ACTIVITY", None, activity[0], activity[1])
+
+    # M6 before M4: "trang theo dõi lỗi của ứng dụng" describes one Page; it
+    # does not name "theo dõi lỗi" inside a Page called "ứng dụng".
+    described = description_page_reference(normalized)
+    if described is not None:
+        return PageReferenceEvidence("DESCRIPTION", None, described[0], description=described[1])
+
+    scoped = scoped_page_reference(normalized)
+    if scoped is not None:
+        return PageReferenceEvidence("TITLE", scoped[1], scoped[0], scope=scoped[2])
 
     if not markers:
         command = EDIT_VERB.match(normalized)
@@ -472,4 +486,129 @@ def activity_page_reference(source: str) -> tuple[str, ActivityReference] | None
         if hint and len(hint.split()) > MAX_HINT_WORDS:
             return None
         return edit, ActivityReference(reference.relative, reference.days, hint or None)
+    return None
+
+
+# M4 (kế hoạch lọc theo cấu trúc, E1–E2): "… vào trang Tasks trong trang Dự án A"
+# names one Page and where it is: an ancestor Page, or a teamspace. There is no
+# project entity: "dự án A" is the words of an ancestor Page's title.
+MAX_SCOPED_NAME_WORDS = 8
+
+
+@dataclass(frozen=True)
+class PageScope:
+    parent_title: str | None = None
+    teamspace_name: str | None = None
+
+
+SCOPE_VI = re.compile(
+    r"^(?P<edit>.+?)\s+(?:vào|trong|ở|trên|tại|cho)\s+trang\s+(?P<title>.+?)\s+"
+    r"(?:"
+    # "trong" needs the kind of place: "trang Tasks trong tuần này" names no Page.
+    r"trong\s+(?P<kind>trang|dự án|teamspace)\s+(?P<name>.+?)"
+    r"|(?:của|thuộc)\s+(?:(?P<kind2>trang|dự án|teamspace)\s+)?(?P<name2>.+?)"
+    r")$",
+    re.IGNORECASE | re.DOTALL,
+)
+SCOPE_EN = re.compile(
+    r"^(?P<edit>.+?)\s+(?:to|in|on|into)\s+(?:the\s+)?(?P<title>.+?)\s+page\s+"
+    r"(?:in|of|under|inside)\s+(?:the\s+)?"
+    r"(?:(?P<kind>project|teamspace)\s+(?P<name>.+?)|(?P<name2>.+?)\s+(?P<kind2>page|project|teamspace))$",
+    re.IGNORECASE | re.DOTALL,
+)
+SCOPE_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+QUOTE_CHARS = "\"'“”‘’`"
+
+
+# "của workspace khác" never names a place inside this workspace, and "của tôi"
+# describes the Page rather than naming its ancestor.
+NOT_A_PLACE = re.compile(r"^(?:workspace|không gian làm việc|other workspace)\b", re.IGNORECASE)
+
+
+def _scoped_name(text: str | None) -> str | None:
+    name = (text or "").strip().strip(QUOTE_CHARS).strip()
+    if (not name or len(name.split()) > MAX_SCOPED_NAME_WORDS or PAGE_MARKER.search(name)
+            or NOT_A_PLACE.match(name) or DESCRIPTIVE_REFERENCE.match(name)):
+        return None
+    return name
+
+
+def scoped_page_reference(source: str) -> tuple[str, str, PageScope] | None:
+    """The edit clause, the Page name and where that Page is, if a sentence says so."""
+    text = SCOPE_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
+    for pattern in (SCOPE_VI, SCOPE_EN):
+        match = pattern.match(text)
+        if not match:
+            continue
+        edit = match.group("edit").strip()
+        title = _scoped_name(match.group("title"))
+        kind = normalize(match.group("kind") or match.group("kind2") or "")
+        name = _scoped_name(match.group("name") or match.group("name2"))
+        if not (title and name and is_edit_clause(edit)):
+            return None
+        if kind == "teamspace":
+            return edit, title, PageScope(teamspace_name=name)
+        # "dự án A" / "project A": NestJS tries "A" and the whole words.
+        if kind in ("dự án", "project"):
+            name = f"{match.group('kind') or match.group('kind2')} {name}"
+        return edit, title, PageScope(parent_title=name)
+    return None
+
+
+# M6 (kế hoạch tìm theo mô tả, G1): "… vào trang dùng để chuẩn bị phát hành"
+# names a Page by what it is for, not by its title. NestJS looks for Pages
+# close to the description and always lets the user pick one.
+MIN_DESCRIPTION_WORDS = 2
+MAX_DESCRIPTION_WORDS = 20
+
+# "ghi chú" is a word of its own (a note), not "ghi" (records) + a description.
+DESCRIPTION_CUE_VI = (
+    r"(?:dùng để|dùng cho|để|nói về|viết về|về|ghi lại|ghi chép|ghi(?!\s+chú\b)|"
+    r"theo dõi|liên quan (?:đến|tới)|chuyên về)"
+)
+DESCRIPTION_CUE_EN = (
+    r"(?:about|for|on|covering|used for|that (?:covers|tracks|is about)|"
+    r"where (?:we|i) (?:track|keep|write down|write))"
+)
+DESCRIPTION_VI = re.compile(
+    r"^(?P<edit>.+?)\s+(?:vào|trong|ở|trên|tại|cho)\s+trang\s+"
+    rf"{DESCRIPTION_CUE_VI}\s+(?P<description>.+?)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "Sửa trang dùng để …: thêm …" puts the edit after the description.
+DESCRIPTION_VI_FIRST = re.compile(
+    r"^(?:(?:hãy|vui lòng)\s+)?(?:sửa|chỉnh sửa|chỉnh|cập nhật)\s+trang\s+"
+    rf"{DESCRIPTION_CUE_VI}\s+(?P<description>[^:,;]+?)\s*[:,;]\s*(?P<edit>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+DESCRIPTION_EN = re.compile(
+    r"^(?P<edit>.+?)\s+(?:to|in|on|into)\s+the\s+page\s+"
+    rf"{DESCRIPTION_CUE_EN}\s+(?P<description>.+?)$",
+    re.IGNORECASE | re.DOTALL,
+)
+DESCRIPTION_EN_FIRST = re.compile(
+    r"^(?:please\s+)?(?:edit|update)\s+the\s+page\s+"
+    rf"{DESCRIPTION_CUE_EN}\s+(?P<description>[^:,;]+?)\s*[:,;]\s*(?P<edit>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+DESCRIPTION_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+
+
+def description_page_reference(source: str) -> tuple[str, str] | None:
+    """The edit clause and the description a sentence names its Page by, if any."""
+    text = DESCRIPTION_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
+    # One Page only, and a quoted name is a title, never a description.
+    if len(_target_markers(text)) != 1 or QUOTED_TEXT.search(text):
+        return None
+    for pattern in (DESCRIPTION_VI, DESCRIPTION_VI_FIRST, DESCRIPTION_EN, DESCRIPTION_EN_FIRST):
+        match = pattern.match(text)
+        if not match:
+            continue
+        edit = DESCRIPTION_TAIL.sub("", match.group("edit").strip())
+        description = match.group("description").strip()
+        words = len(description.split())
+        if (not MIN_DESCRIPTION_WORDS <= words <= MAX_DESCRIPTION_WORDS
+                or not is_edit_clause(edit)):
+            return None
+        return edit, description
     return None

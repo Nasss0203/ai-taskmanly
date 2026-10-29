@@ -1,0 +1,86 @@
+{
+  "pages": [
+    {
+      "id": "auth",
+      "title": "Authentication Improvements",
+      "headers": ["Login", "Security"],
+      "blocks": ["Implement OAuth login with Google", "Add rate limiting to the sign-in endpoint", "Rotate refresh tokens after each use"]
+    },
+    {
+      "id": "release",
+      "title": "Release 2.0",
+      "headers": ["Checklist phát hành", "Rủi ro"],
+      "blocks": ["Đóng băng code vào thứ Sáu", "Viết release notes cho khách hàng", "Kiểm tra lại bản build trên staging trước khi phát hành"]
+    },
+    {
+      "id": "weekly",
+      "title": "Họp tuần",
+      "headers": ["Biên bản", "Việc cần làm"],
+      "blocks": ["Anh Nam báo cáo tiến độ sprint", "Chốt lịch demo với khách hàng vào thứ Ba", "Ai vắng mặt thì đọc lại biên bản"]
+    },
+    {
+      "id": "marketing",
+      "title": "Kế hoạch Marketing Q4",
+      "headers": ["Kênh quảng cáo", "Ngân sách"],
+      "blocks": ["Chạy quảng cáo Facebook cho sản phẩm mới", "Ngân sách 50 triệu cho tháng 11", "Hợp tác với KOL mảng công nghệ"]
+    },
+    {
+      "id": "onboarding",
+      "title": "Onboarding nhân viên mới",
+      "headers": ["Tuần đầu tiên", "Tài khoản"],
+      "blocks": ["Cấp laptop và tài khoản email", "Giới thiệu với từng team", "Đọc tài liệu quy trình làm việc"]
+    },
+    {
+      "id": "bugs",
+      "title": "Bug tracker",
+      "headers": ["Blocker", "Đã sửa"],
+      "blocks": ["Ứng dụng bị crash khi tải ảnh lớn", "Lỗi không gửi được email xác nhận", "Trang thanh toán hiển thị sai giá"]
+    },
+    {
+      "id": "recipes",
+      "title": "Công thức nấu ăn",
+      "headers": ["Món chính", "Tráng miệng"],
+      "blocks": ["Phở bò: hầm xương 8 tiếng", "Bánh flan cần trứng, sữa và đường", "Gà kho gừng"]
+    },
+    {
+      "id": "travel",
+      "title": "Du lịch Đà Lạt",
+      "headers": ["Lịch trình", "Chi phí"],
+      "blocks": ["Ngày 1: hồ Xuân Hương và chợ đêm", "Đặt homestay gần trung tâm", "Thuê xe máy 150 nghìn một ngày"]
+    },
+    {
+      "id": "api",
+      "title": "API documentation",
+      "headers": ["Endpoints", "Errors"],
+      "blocks": ["GET /pages returns the pages of a workspace", "Every error response has a code and a message", "Requests are limited to 100 per minute"]
+    },
+    {
+      "id": "reading",
+      "title": "Sách cần đọc",
+      "headers": ["Kỹ năng", "Tiểu thuyết"],
+      "blocks": ["Atomic Habits", "Đắc nhân tâm", "Nhà giả kim"]
+    }
+  ],
+  "queries": [
+    {"kind": "description", "text": "trang dùng để chuẩn bị phát hành sản phẩm", "page": "release"},
+    {"kind": "description", "text": "trang ghi biên bản các buổi họp hằng tuần", "page": "weekly"},
+    {"kind": "description", "text": "kế hoạch quảng bá cho quý cuối năm", "page": "marketing"},
+    {"kind": "description", "text": "trang hướng dẫn người mới vào công ty", "page": "onboarding"},
+    {"kind": "description", "text": "nơi theo dõi các lỗi của ứng dụng", "page": "bugs"},
+    {"kind": "description", "text": "trang ghi các món ăn", "page": "recipes"},
+    {"kind": "description", "text": "kế hoạch chuyến đi chơi", "page": "travel"},
+    {"kind": "description", "text": "the page describing our REST API", "page": "api"},
+    {"kind": "description", "text": "danh sach sach toi muon doc", "page": "reading"},
+    {"kind": "description", "text": "the page about improving how users sign in", "page": "auth"},
+    {"kind": "content", "text": "page có nói về OAuth", "page": "auth"},
+    {"kind": "content", "text": "trang nào có nhắc tới release notes", "page": "release"},
+    {"kind": "content", "text": "trang có lịch demo với khách hàng", "page": "weekly"},
+    {"kind": "content", "text": "trang nói về ngân sách quảng cáo Facebook", "page": "marketing"},
+    {"kind": "content", "text": "chỗ ghi việc cấp laptop cho nhân viên", "page": "onboarding"},
+    {"kind": "content", "text": "page that mentions the app crashing on big images", "page": "bugs"},
+    {"kind": "content", "text": "trang có cách nấu phở", "page": "recipes"},
+    {"kind": "content", "text": "trang co nhac den thue xe may", "page": "travel"},
+    {"kind": "content", "text": "where did we write about the rate limit of requests", "page": "api"},
+    {"kind": "content", "text": "trang có cuốn Nhà giả kim", "page": "reading"}
+  ]
+}

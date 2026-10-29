@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies import require_internal_service_token
 from app.api.internal.v1.health import router as health_router
+from app.modules.embedding.router import router as embeddings_router
 from app.modules.intent.router import router as intent_router
 from app.modules.modification_planner.router import (
     router as modification_planner_router,
@@ -54,4 +55,10 @@ router.include_router(
     intent_router,
     prefix="/intent",
     tags=["AI Intent"],
+)
+
+router.include_router(
+    embeddings_router,
+    prefix="/embeddings",
+    tags=["AI Embeddings"],
 )

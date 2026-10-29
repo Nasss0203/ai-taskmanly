@@ -7,13 +7,17 @@ from app.llm.base import LLMProvider
 from app.modules.page_intent.prompts.page_intent_prompt import SYSTEM_PROMPT
 from app.modules.page_intent.schemas.page_intent_schema import (
     ActivityPageIntent,
+    DescriptionPageIntent,
+    ScopedTitlePageIntent,
     PageIntentExtraction,
     PageIntentRequest,
     PageIntentResponse,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
     activity_page_reference,
+    description_page_reference,
     detect_page_reference,
+    scoped_page_reference,
     explicit_trailing_page_edit,
     is_standalone_writing_request,
     is_read_only_page_request,
@@ -62,6 +66,44 @@ class PageIntentService:
                 }),
                 provider="deterministic",
                 model="activity-page-reference-v1",
+            )
+        # M6: "… vào trang dùng để chuẩn bị phát hành" names a Page by what it
+        # is for; NestJS offers the Pages closest to that description. Before
+        # M4: "trang theo dõi lỗi của ứng dụng" is a description, not a place.
+        described = description_page_reference(request.instruction)
+        if described is not None:
+            instruction, description = described
+            return PageIntentResponse(
+                result=DescriptionPageIntent.model_validate({
+                    "intent": "MODIFY_PAGE",
+                    "referenceType": "DESCRIPTION",
+                    "pageReference": None,
+                    "instruction": instruction,
+                    "needsClarification": False,
+                    "description": description,
+                }),
+                provider="deterministic",
+                model="description-page-reference-v1",
+            )
+        # M4: "… vào trang Tasks trong trang Dự án A" names a Page and where
+        # it is; NestJS narrows the Pages titled "Tasks" to that place.
+        scoped = scoped_page_reference(request.instruction)
+        if scoped is not None:
+            instruction, title, scope = scoped
+            return PageIntentResponse(
+                result=ScopedTitlePageIntent.model_validate({
+                    "intent": "MODIFY_PAGE",
+                    "referenceType": "TITLE",
+                    "pageReference": title,
+                    "instruction": instruction,
+                    "needsClarification": False,
+                    "scope": {
+                        "parentTitle": scope.parent_title,
+                        "teamspaceName": scope.teamspace_name,
+                    },
+                }),
+                provider="deterministic",
+                model="scoped-page-reference-v1",
             )
         explicit = explicit_trailing_page_edit(request.instruction)
         if explicit is not None:

@@ -30,3 +30,20 @@ class LLMProvider(Protocol):
 
     async def close(self) -> None:
         ...
+
+
+@dataclass(frozen=True)
+class EmbeddingResult:
+    embeddings: list[list[float]]
+    model: str
+
+
+class EmbeddingProvider(Protocol):
+    provider_name: str
+    model_name: str
+
+    async def embed(self, texts: list[str]) -> EmbeddingResult:
+        ...
+
+    async def close(self) -> None:
+        ...
