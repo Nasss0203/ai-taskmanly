@@ -11,7 +11,9 @@ from app.modules.intent.services.intent_rules import (
     inline_source, is_page_summary, is_read_only, multiple_commands, result,
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
-from app.modules.page_intent.services.page_reference_evidence import PAGE_MARKER, detect_page_reference
+from app.modules.page_intent.services.page_reference_evidence import (
+    PAGE_MARKER, content_page_reference, detect_page_reference,
+)
 from app.shared.json_parser import parse_json_object
 
 
@@ -62,6 +64,10 @@ class IntentService:
         source = request.instruction
         if unsafe_override(source) or multiple_commands(source):
             return result('UNCLEAR')
+        # M7 (H1): "tìm trang có nói về X rồi thêm …" starts like a read-only
+        # request but edits the Page it finds.
+        if classification.intent == 'MODIFY_PAGE' and content_page_reference(source) is not None:
+            return result('MODIFY_PAGE')
         if is_read_only(source) or is_page_summary(source) or unsupported_request(source):
             return result('OTHER')
         if classification.intent in ('OTHER', 'UNCLEAR'):

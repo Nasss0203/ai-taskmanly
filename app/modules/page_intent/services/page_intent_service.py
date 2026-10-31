@@ -7,6 +7,7 @@ from app.llm.base import LLMProvider
 from app.modules.page_intent.prompts.page_intent_prompt import SYSTEM_PROMPT
 from app.modules.page_intent.schemas.page_intent_schema import (
     ActivityPageIntent,
+    ContentPageIntent,
     DescriptionPageIntent,
     ScopedTitlePageIntent,
     PageIntentExtraction,
@@ -15,6 +16,8 @@ from app.modules.page_intent.schemas.page_intent_schema import (
 )
 from app.modules.page_intent.services.page_reference_evidence import (
     activity_page_reference,
+    based_on_reference,
+    content_page_reference,
     description_page_reference,
     detect_page_reference,
     scoped_page_reference,
@@ -43,6 +46,19 @@ class PageIntentService:
         self.llm_provider = llm_provider
 
     async def process(self, request: PageIntentRequest) -> PageIntentResponse:
+        # M8 (I2): "… dựa trên trang Bug tracker" names where the facts come
+        # from. The rest of the sentence is read as usual; the source is only
+        # handed back for an edit.
+        based_on = based_on_reference(request.instruction)
+        if based_on is None:
+            return await self._process(request)
+        rest, source = based_on
+        response = await self._process(request.model_copy(update={"instruction": rest}))
+        if response.result.intent != "MODIFY_PAGE":
+            return response
+        return response.model_copy(update={"basedOn": source})
+
+    async def _process(self, request: PageIntentRequest) -> PageIntentResponse:
         # A delimited, explicitly named Page followed by a clear edit clause
         # needs no model inference. This also avoids unstable OTHER/UNCLEAR
         # classifications and exhausted JSON retries for this narrow syntax.
@@ -66,6 +82,24 @@ class PageIntentService:
                 }),
                 provider="deterministic",
                 model="activity-page-reference-v1",
+            )
+        # M7: "… vào trang có nhắc tới OAuth" / "Tìm trang có nói về OAuth rồi
+        # thêm …" names a Page by words inside it. Before M6, whose "nói về"
+        # it holds.
+        content = content_page_reference(request.instruction)
+        if content is not None:
+            instruction, topic = content
+            return PageIntentResponse(
+                result=ContentPageIntent.model_validate({
+                    "intent": "MODIFY_PAGE",
+                    "referenceType": "CONTENT",
+                    "pageReference": None,
+                    "instruction": instruction,
+                    "needsClarification": False,
+                    "topic": topic,
+                }),
+                provider="deterministic",
+                model="content-page-reference-v1",
             )
         # M6: "… vào trang dùng để chuẩn bị phát hành" names a Page by what it
         # is for; NestJS offers the Pages closest to that description. Before

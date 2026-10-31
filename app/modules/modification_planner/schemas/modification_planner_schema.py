@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 
 
 import math
@@ -464,6 +466,33 @@ class AiPageContext(
 
 
 
+# M8 (kế hoạch ngữ cảnh RAG, I4): passages of other Pages, read only. No Page
+# or block IDs: the model cannot aim an operation at a source Page.
+MAX_REFERENCES = 8
+MAX_REFERENCE_TEXT_LENGTH = 400
+MAX_REFERENCES_BYTES = 3000
+MAX_INPUT_BYTES_WITH_REFERENCES = 13000
+
+
+class ModificationPlannerReference(
+
+    ModificationPlannerBaseModel,
+
+):
+
+    label: Annotated[StrictStr, Field(pattern=r"^S[1-8]$")]
+
+    pageTitle: Annotated[StrictStr, Field(max_length=255)]
+
+    text: Annotated[NonBlankString, Field(max_length=MAX_REFERENCE_TEXT_LENGTH)]
+
+    # Only for a named source Page read whole: the heading the passage sits
+    # under, or that the passage is a heading itself.
+    section: Annotated[StrictStr, Field(min_length=1, max_length=255)] | None = None
+
+    isHeading: StrictBool = False
+
+
 class ModificationPlannerRequest(
 
     ModificationPlannerBaseModel,
@@ -474,9 +503,27 @@ class ModificationPlannerRequest(
 
     context: Annotated[AiPageContext, BeforeValidator(validate_context)]
 
+    references: Annotated[
+        list[ModificationPlannerReference] | None,
+        Field(max_length=MAX_REFERENCES),
+    ] = None
+
     @model_validator(mode="after")
     def validate_budget(self) -> ModificationPlannerRequest:
-        validate_input_budget(self.model_dump(mode="json"))
+        if not self.references:
+            validate_input_budget(self.model_dump(mode="json"))
+            return self
+        labels = [reference.label for reference in self.references]
+        if len(set(labels)) != len(labels):
+            raise ValueError("Reference labels must be unique.")
+        if sum(len(reference.text.encode("utf-8")) for reference in self.references) > MAX_REFERENCES_BYTES:
+            raise ValueError("References exceed the 3000-byte UTF-8 budget.")
+        # The Page's own context keeps its 8000-byte limit; references add room.
+        encoded = json.dumps(
+            self.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) > MAX_INPUT_BYTES_WITH_REFERENCES:
+            raise ValueError("Combined AI input exceeds the 13000-byte UTF-8 budget.")
         return self
 
 

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from app.shared.request_limits import CurrentPageId, Instruction, validate_input_budget
 
@@ -142,18 +142,45 @@ class DescriptionPageIntent(BaseModel):
     description: str = Field(min_length=1, max_length=255)
 
 
+class ContentPageIntent(BaseModel):
+    """MODIFY_PAGE of a Page named by words inside it (M7). Only the
+    deterministic rules return it; NestJS offers the Pages whose text is
+    closest and the user always picks one."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    intent: Literal["MODIFY_PAGE"]
+    referenceType: Literal["CONTENT"]
+    pageReference: None
+    instruction: str = Field(min_length=1)
+    needsClarification: Literal[False]
+    topic: str = Field(min_length=1, max_length=255)
+
+
 class PageIntentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # ActivityPageIntent adds the "activity" key, ScopedTitlePageIntent the
-    # "scope" key and DescriptionPageIntent the "description" key; every other
-    # result keeps exactly the five keys of PageIntentExtraction (the model's
-    # schema).
+    # "scope" key, DescriptionPageIntent the "description" key and
+    # ContentPageIntent the "topic" key; every other result keeps exactly the
+    # five keys of PageIntentExtraction (the model's schema).
     result: (
         PageIntentExtraction
         | ActivityPageIntent
         | ScopedTitlePageIntent
         | DescriptionPageIntent
+        | ContentPageIntent
     )
     provider: str
     model: str
+    # M8 (kế hoạch ngữ cảnh RAG, I2): the source the user named ("dựa trên …").
+    # It goes out inside "result", and only when there is one; the result
+    # models (and the model's own JSON schema) never carry it.
+    basedOn: str | None = Field(default=None, min_length=1, max_length=255, exclude=True)
+
+    @model_serializer(mode="wrap")
+    def _source_inside_result(self, handler):
+        data = handler(self)
+        if self.basedOn is not None:
+            data["result"] = {**data["result"], "basedOn": self.basedOn}
+        return data

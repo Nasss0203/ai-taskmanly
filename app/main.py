@@ -26,7 +26,15 @@ async def lifespan(application: FastAPI):
     configure_logging(settings.log_level)
 
     async with AsyncExitStack() as exit_stack:
-        provider = create_llm_provider(settings)
+        def num_gpu_for(model_name: str, requested: int | None) -> int | None:
+            # OLLAMA_MODEL_NUM_GPU gives each model one placement, so every
+            # job calling it shares the same loaded copy.
+            return settings.ollama_model_num_gpu.get(model_name, requested)
+
+        default_num_gpu = num_gpu_for(settings.ollama_model, settings.ollama_num_gpu)
+        provider = create_llm_provider(
+            settings.model_copy(update={"ollama_num_gpu": default_num_gpu})
+        )
 
         exit_stack.push_async_callback(provider.close)
 
@@ -39,7 +47,7 @@ async def lifespan(application: FastAPI):
             providers_by_config[
                 (
                     settings.ollama_model,
-                    settings.ollama_num_gpu,
+                    default_num_gpu,
                 )
             ] = provider
 
@@ -47,6 +55,7 @@ async def lifespan(application: FastAPI):
             model_name: str,
             num_gpu: int | None,
         ) -> LLMProvider:
+            num_gpu = num_gpu_for(model_name, num_gpu)
             key = (model_name, num_gpu)
 
             existing_provider = providers_by_config.get(key)

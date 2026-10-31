@@ -47,6 +47,12 @@ from app.modules.modification_planner.services.todo_status import (
     plan_todo_status,
 )
 from app.shared.list_markers import has_list_marker, strip_list_marker
+from app.modules.modification_planner.services.reference_grounding import keep_grounded_blocks
+from app.modules.modification_planner.services.reference_checklist import (
+    REFERENCE_CHECKLIST_MODEL,
+    REFERENCE_CHECKLIST_PROVIDER,
+    plan_reference_checklist,
+)
 logger = logging.getLogger(__name__)
 PLAN_ADAPTER = TypeAdapter(AiModificationPlan)
 ROUTE_ADAPTER = TypeAdapter(
@@ -124,6 +130,19 @@ class ModificationPlannerService:
                     provider=TODO_STATUS_PROVIDER,
                     model=model,
                 )
+        # M8: a checklist of a named source Page's items under the heading the
+        # user named, or of all its items, is picked by rule.
+        checklist = plan_reference_checklist(
+            request.instruction, request.context.page.id, request.references,
+        )
+        if checklist is not None:
+            validate_modification_plan_semantics(checklist, request.context)
+            logger.info("modification_planner_rules model=%s status=%s", REFERENCE_CHECKLIST_MODEL, checklist.status)
+            return ModificationPlannerResponse(
+                result=checklist,
+                provider=REFERENCE_CHECKLIST_PROVIDER,
+                model=REFERENCE_CHECKLIST_MODEL,
+            )
         context_payload = self._serialize_context(
             request.context,
         )
@@ -169,6 +188,7 @@ class ModificationPlannerService:
             )
             plan = self._checklist_items_as_todos(plan, request.instruction)
             plan = self._strip_todo_list_markers(plan)
+            plan = self._keep_grounded_items(plan, request)
         except (
             ModificationPlannerSemanticValidationError,
             ValueError,
@@ -207,6 +227,13 @@ class ModificationPlannerService:
                 total_tokens=total_usage.total_tokens,
             ),
         )
+    @staticmethod
+    def _references(request: ModificationPlannerRequest) -> list[dict[str, Any]] | None:
+        """M8: the read-only passages NestJS found in the source the user named."""
+        if not request.references:
+            return None
+        return [reference.model_dump(mode="json") for reference in request.references]
+
     async def _generate_route(
         self,
         request: ModificationPlannerRequest,
@@ -216,6 +243,7 @@ class ModificationPlannerService:
             build_modification_planner_route_prompt(
                 instruction=request.instruction,
                 context=context_payload,
+                references=self._references(request),
             )
         )
         return await self._generate(
@@ -246,6 +274,7 @@ class ModificationPlannerService:
                 build_need_more_context_generation_prompt(
                     instruction=request.instruction,
                     context=context_payload,
+                    references=self._references(request),
                 )
             )
             response_schema = (
@@ -268,6 +297,7 @@ class ModificationPlannerService:
                 build_insert_blocks_generation_prompt(
                     instruction=request.instruction,
                     context=context_payload,
+                    references=self._references(request),
                 )
             )
             response_schema = self._insert_blocks_adapter(
@@ -287,6 +317,7 @@ class ModificationPlannerService:
                 build_create_database_rows_generation_prompt(
                     instruction=request.instruction,
                     context=context_payload,
+                    references=self._references(request),
                 )
             )
             response_schema = (
@@ -307,6 +338,7 @@ class ModificationPlannerService:
                 build_mixed_operations_generation_prompt(
                     instruction=request.instruction,
                     context=context_payload,
+                    references=self._references(request),
                 )
             )
             response_schema = self._mixed_operations_adapter(
@@ -437,6 +469,36 @@ class ModificationPlannerService:
         return PLAN_ADAPTER.validate_python(
             plan_payload,
         )
+    @staticmethod
+    def _keep_grounded_items(plan: Any, request: ModificationPlannerRequest) -> Any:
+        """M8 (I5): with references, an item from neither a passage nor the
+        request is dropped; nothing left means the source did not hold it."""
+        if not request.references or plan.status != "PLAN_READY":
+            return plan
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        operations, dropped = keep_grounded_blocks(
+            data.get("operations") or [],
+            [reference.text for reference in request.references],
+            request.instruction,
+        )
+        if not dropped:
+            return plan
+        logger.info("modification_planner_ungrounded_items dropped=%d", dropped)
+        if operations:
+            return PLAN_ADAPTER.validate_python({**data, "operations": operations})
+        return PLAN_ADAPTER.validate_python({
+            "schemaVersion": 1,
+            "type": "AI_MODIFICATION_PLAN",
+            "pageId": data["pageId"],
+            "status": "NEED_MORE_CONTEXT",
+            "summary": "Nguồn không có nội dung khớp yêu cầu.",
+            "operations": [],
+            "contextRequests": [{
+                "reason": "MISSING_RESOURCE_CONTEXT",
+                "description": "Các đoạn trích từ trang nguồn không có mục nào khớp yêu cầu.",
+            }],
+        })
+
     @staticmethod
     def _reanchor_non_toggle_parents(plan: Any, context: Any) -> Any:
         # Only a TOGGLE holds children. Models name a TEXT/HEADER as parent to

@@ -15,7 +15,7 @@ from app.modules.modification_planner.services.block_text import parse_block_tex
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 
 
-ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY", "DESCRIPTION"]
+ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY", "DESCRIPTION", "CONTENT"]
 
 PAGE_MARKER = re.compile(r"(?<!\w)(?:page|trang)(?!\w)", re.IGNORECASE)
 CURRENT_REFERENCE = re.compile(
@@ -122,6 +122,8 @@ class PageReferenceEvidence:
     scope: "PageScope | None" = None
     # Only for DESCRIPTION: what the Page is for, in the user's words (M6).
     description: str | None = None
+    # Only for CONTENT: words inside the Page, in the user's words (M7).
+    topic: str | None = None
 
 
 def _source_instruction(source: str, marker_start: int) -> str | None:
@@ -263,11 +265,20 @@ def detect_page_reference(
     source: str, *, has_current_page: bool = False,
 ) -> PageReferenceEvidence:
     normalized = unicodedata.normalize("NFC", source).strip()
+    # M8: "… dựa trên trang Bug tracker" names a source, not a second target.
+    based_on = based_on_reference(normalized)
+    if based_on is not None:
+        normalized = based_on[0]
     markers = _target_markers(normalized)
 
     activity = activity_page_reference(normalized)
     if activity is not None:
         return PageReferenceEvidence("ACTIVITY", None, activity[0], activity[1])
+
+    # M7 before M6: "trang có nói về X" holds M6's "nói về".
+    content = content_page_reference(normalized)
+    if content is not None:
+        return PageReferenceEvidence("CONTENT", None, content[0], topic=content[1])
 
     # M6 before M4: "trang theo dõi lỗi của ứng dụng" describes one Page; it
     # does not name "theo dõi lỗi" inside a Page called "ứng dụng".
@@ -612,3 +623,85 @@ def description_page_reference(source: str) -> tuple[str, str] | None:
             return None
         return edit, description
     return None
+
+
+# M7 (kế hoạch tìm theo nội dung, H1): "… vào trang có nhắc tới OAuth" and
+# "Tìm trang có nói về OAuth rồi thêm …" name a Page by words inside it.
+# NestJS offers the Pages whose text is closest, each with the matching words.
+MAX_TOPIC_WORDS = 20
+
+CONTENT_CUE_VI = (
+    r"(?:có nói về|có nhắc tới|có nhắc đến|có nhắc|có ghi(?!\s+chú\b)|có chứa|chứa|"
+    r"có nội dung|có đoạn(?:\s+nói về)?)"
+)
+CONTENT_CUE_EN = r"(?:that mentions|that talks about|that contains|mentioning|containing)"
+CONTENT_VI = re.compile(
+    r"^(?P<edit>.+?)\s+(?:vào|trong|ở|trên|tại|cho)\s+(?:trang|page)\s+"
+    rf"{CONTENT_CUE_VI}\s+(?P<topic>.+?)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "Tìm trang có nói về OAuth rồi thêm …": the Page first, then the edit.
+CONTENT_VI_FIND = re.compile(
+    r"^(?:(?:hãy|bạn hãy|giúp tôi|giúp mình)\s+)?tìm\s+(?:(?:một|1|cái)\s+)?(?:trang|page)\s+"
+    rf"(?:nào\s+)?{CONTENT_CUE_VI}\s+(?P<topic>[^,;:]+?)"
+    r"(?:\s*[,;:]\s*(?:(?:rồi|sau đó|xong)\s+)?|\s+(?:rồi|sau đó)\s+)(?P<edit>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+CONTENT_EN = re.compile(
+    r"^(?P<edit>.+?)\s+(?:to|in|on|into)\s+the\s+page\s+"
+    rf"{CONTENT_CUE_EN}\s+(?P<topic>.+?)$",
+    re.IGNORECASE | re.DOTALL,
+)
+CONTENT_EN_FIND = re.compile(
+    rf"^(?:please\s+)?find\s+the\s+page\s+{CONTENT_CUE_EN}\s+(?P<topic>[^,;:]+?)"
+    r"(?:\s*[,;:]\s*(?:then\s+)?|\s+(?:and then|then|and)\s+)(?P<edit>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def content_page_reference(source: str) -> tuple[str, str] | None:
+    """The edit clause and the words a sentence finds its Page by, if any."""
+    text = DESCRIPTION_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
+    # One Page only, and a quoted name is a title, never words inside a Page.
+    if len(_target_markers(text)) != 1 or QUOTED_TEXT.search(text):
+        return None
+    for pattern in (CONTENT_VI, CONTENT_VI_FIND, CONTENT_EN, CONTENT_EN_FIND):
+        match = pattern.match(text)
+        if not match:
+            continue
+        edit = DESCRIPTION_TAIL.sub("", match.group("edit").strip())
+        topic = match.group("topic").strip()
+        # One word is enough: "có nhắc tới OAuth" already says what it is.
+        if not 1 <= len(topic.split()) <= MAX_TOPIC_WORDS or not is_edit_clause(edit):
+            return None
+        return edit, topic
+    return None
+
+
+# M8 (kế hoạch ngữ cảnh RAG, I2): "… dựa trên trang Bug tracker" / "… dựa
+# trên ghi chú QA gần đây" says where the draft's facts come from. It names a
+# source to read, never the target Page or an edit.
+MAX_BASED_ON_WORDS = 12
+
+BASED_ON = re.compile(
+    r"^(?P<rest>.+?)\s*,?\s+(?:dựa trên|dựa vào|căn cứ vào|"
+    r"theo nội dung(?:\s+(?:của|trong))?|tham khảo|based on|according to)\s+"
+    r"(?P<source>.+?)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "tài liệu tham khảo vào trang X": the cue word is a noun, the source a place.
+NOT_A_SOURCE = re.compile(r"^(?:vào|trong|ở|trên|tại|cho|to|in|on|into)\b", re.IGNORECASE)
+
+
+def based_on_reference(source: str) -> tuple[str, str] | None:
+    """The sentence without its source, and the source, if the user named one."""
+    text = DESCRIPTION_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
+    match = BASED_ON.match(text)
+    if not match:
+        return None
+    rest = match.group("rest").strip().rstrip(",").strip()
+    named = match.group("source").strip()
+    if (not 1 <= len(named.split()) <= MAX_BASED_ON_WORDS
+            or NOT_A_SOURCE.match(named) or not rest):
+        return None
+    return rest, named

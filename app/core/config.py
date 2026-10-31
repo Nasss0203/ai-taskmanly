@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # None means no explicit num_gpu override.
     ollama_num_gpu: int | None = Field(default=None, ge=0)
 
+    # GPU layers per model, whatever the job that calls it, e.g.
+    # OLLAMA_MODEL_NUM_GPU={"qwen3:1.7b": 0, "qwen3:4b-instruct": 99}. On a
+    # 4 GB GPU this puts the planner model wholly on the GPU and the intent
+    # model on the CPU, instead of splitting the planner model across the
+    # GPU and system RAM. It wins over OLLAMA_NUM_GPU and the planner's own.
+    ollama_model_num_gpu: dict[str, int] = Field(default_factory=dict)
+
     # Dedicated GPU override for Modification Planner.
     ollama_modification_planner_num_gpu: int | None = Field(
         default=None,

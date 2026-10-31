@@ -64,6 +64,39 @@ Invalid settings fail before providers initialize. Only `APP_ENV=test` permits
 short fixture secrets or an omitted token. Validation errors redact the token.
 For a deterministic local smoke test without Ollama, set `LLM_PROVIDER=fake`.
 
+## Ollama on a 4 GB GPU
+
+The planner model (`qwen3:4b-instruct`) is only fast and steady when it sits
+wholly on the GPU. Split between the GPU and system RAM it took ~31 s per
+draft, and when the machine ran short of RAM Ollama failed to load models
+(`Load failed`, `bad_alloc` in its `server.log`), which reached users as 502/503.
+
+1. **Ollama itself** (Windows user variables, read only when Ollama starts):
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable("OLLAMA_FLASH_ATTENTION", "1", "User")
+   [Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE", "q8_0", "User")
+   ```
+
+   Quit Ollama from the tray and start it again. Check with
+   `grep -E 'msg="server config"' "$LOCALAPPDATA/Ollama/server.log" | tail -1`:
+   it must show `OLLAMA_FLASH_ATTENTION:true` and `OLLAMA_KV_CACHE_TYPE:q8_0`.
+   This halves the context cache, so the 4B model fits in the GPU.
+
+2. **This service** (`.env`): one GPU placement per model, for every job that
+   calls it, wins over `OLLAMA_NUM_GPU` and the planner's own setting:
+
+   ```
+   OLLAMA_MODEL_NUM_GPU={"qwen3:1.7b": 0, "qwen3:4b-instruct": 99}
+   ```
+
+   Restart the service after changing `.env`.
+
+Measured with `python -m scripts.benchmark_ollama_stability --rounds 3`
+(2026-10-31, RTX 3050 Ti 4 GB): planner 31.4 s -> 4.3 s (p95 40.0 -> 5.1 s),
+writing continue 4.2 -> 0.5 s, intent 0.7 -> 3.9 s (now on the CPU); no load
+failure and no model reload during the run.
+
 ## Run the API
 
 ```bash
