@@ -1,0 +1,806 @@
+[
+  {
+    "example": {
+      "id": "t0004",
+      "kind": "heading",
+      "lang": "vi",
+      "request": {
+        "instruction": "thêm heading Việc tuần sau sau mục Ngân sách",
+        "context": {
+          "schemaVersion": 1,
+          "builtAt": "2026-10-26T00:00:00.000Z",
+          "page": {
+            "id": "fcf00fec-b91e-49e5-afe0-9f07cefe2a1f",
+            "workspaceId": "5d58c705-f979-404a-b47a-ebdd597a1ecf",
+            "teamspaceId": null,
+            "parentPageId": null,
+            "title": "Kế hoạch tuyển dụng",
+            "icon": null,
+            "coverUrl": null,
+            "updatedAt": "2026-10-26T00:00:00.000Z"
+          },
+          "blocks": [
+            {
+              "id": "fa7f0eab-4c4f-4b06-8732-2e25c215a82a",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 0,
+              "title": null,
+              "content": {
+                "text": "Ngân sách"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "42d87208-d86f-40f6-b239-f3c7174c77a2",
+              "parentBlockId": null,
+              "type": "TEXT",
+              "orderIndex": 1,
+              "title": null,
+              "content": {
+                "text": "Ngân sách tuyển dụng đã được duyệt."
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "c59db916-5b0e-476f-aac3-4446e883a1d4",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 2,
+              "title": null,
+              "content": {
+                "text": "Vị trí cần tuyển"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "fc241d0b-c9d4-48b1-8fbf-33609cfc8652",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 3,
+              "title": null,
+              "content": {
+                "text": "Gửi bài test",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "d17e4497-3d48-42a5-8e5b-2a9231f51707",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 4,
+              "title": null,
+              "content": {
+                "text": "Hẹn lịch phỏng vấn",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "8483f8b8-332d-4331-ba0b-9965cda6c6fd",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 5,
+              "title": null,
+              "content": {
+                "text": "Đăng tin tuyển dụng",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "0726e25c-fd56-4926-876b-3e36bb2313f5",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 6,
+              "title": null,
+              "content": {
+                "text": "Ghi chú"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "b1491e24-3192-4704-8259-405278e4b98d",
+              "parentBlockId": null,
+              "type": "TEXT",
+              "orderIndex": 7,
+              "title": null,
+              "content": {
+                "text": "Ngân sách tuyển dụng đã được duyệt."
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            }
+          ],
+          "databaseReferences": [],
+          "databases": [],
+          "completeness": {
+            "blocks": {
+              "total": 8,
+              "included": 8,
+              "truncated": false
+            },
+            "databases": {
+              "total": 0,
+              "included": 0,
+              "truncated": false
+            },
+            "rows": [],
+            "textTruncated": false
+          }
+        }
+      },
+      "expect": {
+        "status": [
+          "PLAN_READY"
+        ],
+        "max_operations": 1,
+        "block_types": [
+          "HEADER"
+        ],
+        "texts_contain": [
+          "Việc tuần sau"
+        ],
+        "after_block": [
+          "42d87208-d86f-40f6-b239-f3c7174c77a2",
+          "fa7f0eab-4c4f-4b06-8732-2e25c215a82a"
+        ]
+      }
+    },
+    "responses": [
+      "{\"status\":\"PLAN_READY\",\"operationTypes\":[\"INSERT_BLOCKS\"]}",
+      "{\"operations\":[{\"type\":\"INSERT_BLOCKS\",\"parentBlockId\":\"fa7f0eab-4c4f-4b06-8732-2e25c215a82a\",\"afterBlockId\":null,\"blocks\":[{\"type\":\"HEADER\",\"content\":{\"text\":\"Việc tuần sau\"},\"styleConfig\":{\"level\":1}}]}]}"
+    ],
+    "clean_plan": {
+      "schemaVersion": 1,
+      "type": "AI_MODIFICATION_PLAN",
+      "pageId": "fcf00fec-b91e-49e5-afe0-9f07cefe2a1f",
+      "status": "PLAN_READY",
+      "summary": "thêm heading Việc tuần sau sau mục Ngân sách",
+      "operations": [
+        {
+          "type": "INSERT_BLOCKS",
+          "parentBlockId": null,
+          "afterBlockId": "fa7f0eab-4c4f-4b06-8732-2e25c215a82a",
+          "blocks": [
+            {
+              "type": "HEADER",
+              "content": {
+                "text": "Việc tuần sau"
+              },
+              "styleConfig": {
+                "level": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "example": {
+      "id": "t0014",
+      "kind": "references",
+      "lang": "en",
+      "request": {
+        "instruction": "add a to-do list",
+        "context": {
+          "schemaVersion": 1,
+          "builtAt": "2026-10-26T00:00:00.000Z",
+          "page": {
+            "id": "568a8c29-b221-4139-88ba-9bd97e318ad6",
+            "workspaceId": "aebcb0aa-5cc0-4f06-aba9-9d01b7e49f36",
+            "teamspaceId": null,
+            "parentPageId": null,
+            "title": "Hiring pipeline",
+            "icon": null,
+            "coverUrl": null,
+            "updatedAt": "2026-10-26T00:00:00.000Z"
+          },
+          "blocks": [
+            {
+              "id": "f18bde0e-8641-4b60-8ce3-b0cc1202952f",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 0,
+              "title": null,
+              "content": {
+                "text": "Open roles"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "02ad9d2b-004b-4fd0-99df-209bca5d5e7d",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 1,
+              "title": null,
+              "content": {
+                "text": "Send take-home task",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "f57d1709-4752-4194-b5ef-d233ff125eb4",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 2,
+              "title": null,
+              "content": {
+                "text": "Post the job ad",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "79ad8999-3e0b-45cd-a23f-03ccd6e3a71e",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 3,
+              "title": null,
+              "content": {
+                "text": "Notes"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "0e28b64f-4eb1-4fca-a64f-7613b4642ea4",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 4,
+              "title": null,
+              "content": {
+                "text": "Screen resumes",
+                "checked": true
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "a5acd341-aca9-4fd0-a285-6ec67f914286",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 5,
+              "title": null,
+              "content": {
+                "text": "Post the job ad",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "6ca06496-aad7-47c0-ba53-c17641db898e",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 6,
+              "title": null,
+              "content": {
+                "text": "Book onsite interviews",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            }
+          ],
+          "databaseReferences": [],
+          "databases": [],
+          "completeness": {
+            "blocks": {
+              "total": 7,
+              "included": 7,
+              "truncated": false
+            },
+            "databases": {
+              "total": 0,
+              "included": 0,
+              "truncated": false
+            },
+            "rows": [],
+            "textTruncated": false
+          }
+        },
+        "references": [
+          {
+            "label": "S1",
+            "pageTitle": "Hiring playbook",
+            "text": "Reply to every candidate"
+          },
+          {
+            "label": "S2",
+            "pageTitle": "Hiring playbook",
+            "text": "Confirm headcount with finance"
+          }
+        ]
+      },
+      "expect": {
+        "status": [
+          "PLAN_READY"
+        ],
+        "max_operations": 1,
+        "todos_from": [
+          "Reply to every candidate",
+          "Confirm headcount with finance"
+        ],
+        "min_todos": 1
+      }
+    },
+    "responses": [
+      "{\"status\":\"PLAN_READY\",\"operationTypes\":[\"INSERT_BLOCKS\"]}",
+      "{\"operations\":[{\"type\":\"INSERT_BLOCKS\",\"parentBlockId\":null,\"afterBlockId\":null,\"blocks\":[{\"type\":\"TODO\",\"content\":{\"text\":\"Reply to every candidate\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Confirm headcount with finance\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Send take-home task\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Post the job ad\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Book onsite interviews\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Screen resumes\",\"checked\":true}},{\"type\":\"TODO\",\"content\":{\"text\":\"Post the job ad\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Chuẩn bị release\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Checklist chuẩn bị release\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Checklist item 1\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Checklist item 2\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Checklist item 3\",\"checked\":false}}]}]}"
+    ],
+    "clean_plan": {
+      "schemaVersion": 1,
+      "type": "AI_MODIFICATION_PLAN",
+      "pageId": "568a8c29-b221-4139-88ba-9bd97e318ad6",
+      "status": "PLAN_READY",
+      "summary": "add a to-do list",
+      "operations": [
+        {
+          "type": "INSERT_BLOCKS",
+          "parentBlockId": null,
+          "afterBlockId": null,
+          "blocks": [
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Reply to every candidate",
+                "checked": false
+              }
+            },
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Confirm headcount with finance",
+                "checked": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "example": {
+      "id": "t0269",
+      "kind": "references",
+      "lang": "vi",
+      "request": {
+        "instruction": "thêm danh sách việc cần làm",
+        "context": {
+          "schemaVersion": 1,
+          "builtAt": "2026-10-26T00:00:00.000Z",
+          "page": {
+            "id": "ea9612c5-e8a6-4121-83f9-39a588d212cd",
+            "workspaceId": "37fcba8c-73a4-41c2-a464-042d9a847f26",
+            "teamspaceId": null,
+            "parentPageId": null,
+            "title": "Học tiếng Anh",
+            "icon": null,
+            "coverUrl": null,
+            "updatedAt": "2026-10-26T00:00:00.000Z"
+          },
+          "blocks": [
+            {
+              "id": "f4971305-1bec-46f7-ae3b-4c196e9ee6c4",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 0,
+              "title": null,
+              "content": {
+                "text": "Luyện nghe"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "bdbde515-50ab-4cc9-8ef7-e56075aa0423",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 1,
+              "title": null,
+              "content": {
+                "text": "Ôn thì hiện tại hoàn thành",
+                "checked": true
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "fd88761a-49d0-46e1-8a64-a94e6e17beee",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 2,
+              "title": null,
+              "content": {
+                "text": "Từ vựng"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "7c600605-0165-4f67-bf7a-c22e6883a5cd",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 3,
+              "title": null,
+              "content": {
+                "text": "Ôn thì hiện tại hoàn thành",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "95b79297-8120-4bed-a50b-cb44308a7843",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 4,
+              "title": null,
+              "content": {
+                "text": "Làm đề nghe số 3",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "29b08411-a357-4bf9-8d52-be013a406dc6",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 5,
+              "title": null,
+              "content": {
+                "text": "Viết một đoạn văn",
+                "checked": true
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            }
+          ],
+          "databaseReferences": [],
+          "databases": [],
+          "completeness": {
+            "blocks": {
+              "total": 6,
+              "included": 6,
+              "truncated": false
+            },
+            "databases": {
+              "total": 0,
+              "included": 0,
+              "truncated": false
+            },
+            "rows": [],
+            "textTruncated": false
+          }
+        },
+        "references": [
+          {
+            "label": "S1",
+            "pageTitle": "Mẹo học ngoại ngữ",
+            "text": "Nghe podcast khi đi đường"
+          },
+          {
+            "label": "S2",
+            "pageTitle": "Mẹo học ngoại ngữ",
+            "text": "Tìm bạn luyện nói hằng tuần"
+          }
+        ]
+      },
+      "expect": {
+        "status": [
+          "PLAN_READY"
+        ],
+        "max_operations": 1,
+        "todos_from": [
+          "Nghe podcast khi đi đường",
+          "Tìm bạn luyện nói hằng tuần"
+        ],
+        "min_todos": 1
+      }
+    },
+    "responses": [
+      "{\"status\":\"PLAN_READY\",\"operationTypes\":[\"INSERT_BLOCKS\"]}",
+      "{\"operations\":[{\"type\":\"INSERT_BLOCKS\",\"parentBlockId\":null,\"afterBlockId\":null,\"blocks\":[{\"type\":\"TODO\",\"content\":{\"text\":\"Nghe podcast khi đi đường\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Tìm bạn luyện nói hằng tuần\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Làm đề nghe số 3\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Viết một đoạn văn\",\"checked\":true}},{\"type\":\"TODO\",\"content\":{\"text\":\"Ôn thì hiện tại hoàn thành\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Ôn thì hiện tại hoàn thành\",\"checked\":true}},{\"type\":\"HEADER\",\"content\":{\"text\":\"Luyện nghe\"},\"styleConfig\":{\"level\":1}},{\"type\":\"HEADER\",\"content\":{\"text\":\"Từ vựng\"},\"styleConfig\":{\"level\":1}}]}]}"
+    ],
+    "clean_plan": {
+      "schemaVersion": 1,
+      "type": "AI_MODIFICATION_PLAN",
+      "pageId": "ea9612c5-e8a6-4121-83f9-39a588d212cd",
+      "status": "PLAN_READY",
+      "summary": "thêm danh sách việc cần làm",
+      "operations": [
+        {
+          "type": "INSERT_BLOCKS",
+          "parentBlockId": null,
+          "afterBlockId": null,
+          "blocks": [
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Nghe podcast khi đi đường",
+                "checked": false
+              }
+            },
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Tìm bạn luyện nói hằng tuần",
+                "checked": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "example": {
+      "id": "t0345",
+      "kind": "references",
+      "lang": "vi",
+      "request": {
+        "instruction": "them danh sach viec can lam",
+        "context": {
+          "schemaVersion": 1,
+          "builtAt": "2026-10-26T00:00:00.000Z",
+          "page": {
+            "id": "d7737eb3-3d50-4e50-8a65-2e600c3ec8ef",
+            "workspaceId": "c581f234-63a7-4341-ac87-9a1aba49d738",
+            "teamspaceId": null,
+            "parentPageId": null,
+            "title": "Chiến dịch mùa hè",
+            "icon": null,
+            "coverUrl": null,
+            "updatedAt": "2026-10-26T00:00:00.000Z"
+          },
+          "blocks": [
+            {
+              "id": "fc511dea-19d2-4dd2-afbe-bfae2e6e8890",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 0,
+              "title": null,
+              "content": {
+                "text": "Đo lường"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "601fc52a-8f4e-4e2e-83bc-347bba7ee2e9",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 1,
+              "title": null,
+              "content": {
+                "text": "Chạy quảng cáo Facebook",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "dcead77f-3584-41cf-b904-9948e0826feb",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 2,
+              "title": null,
+              "content": {
+                "text": "Viết bài blog",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "c63e3557-ca55-4daf-a684-89ca11a57c66",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 3,
+              "title": null,
+              "content": {
+                "text": "Mục tiêu"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "4dc8558f-80ce-4981-a029-41b516a53bd3",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 4,
+              "title": null,
+              "content": {
+                "text": "Viết bài blog",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "729de186-56e6-462d-9192-3b6931f0e962",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 5,
+              "title": null,
+              "content": {
+                "text": "Chạy quảng cáo Facebook",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "d754778c-2c40-470f-bd11-07f9a598d241",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 6,
+              "title": null,
+              "content": {
+                "text": "Lên lịch đăng bài",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            },
+            {
+              "id": "ba7b02ac-0888-4fa1-8a46-c85b442f379d",
+              "parentBlockId": null,
+              "type": "HEADER",
+              "orderIndex": 7,
+              "title": null,
+              "content": {
+                "text": "Kênh quảng cáo"
+              },
+              "styleConfig": {
+                "level": 1
+              },
+              "dataConfig": null
+            },
+            {
+              "id": "9cbba22d-28e1-471a-8afa-56aec42e319f",
+              "parentBlockId": null,
+              "type": "TODO",
+              "orderIndex": 8,
+              "title": null,
+              "content": {
+                "text": "Thiết kế banner",
+                "checked": false
+              },
+              "styleConfig": null,
+              "dataConfig": null
+            }
+          ],
+          "databaseReferences": [],
+          "databases": [],
+          "completeness": {
+            "blocks": {
+              "total": 9,
+              "included": 9,
+              "truncated": false
+            },
+            "databases": {
+              "total": 0,
+              "included": 0,
+              "truncated": false
+            },
+            "rows": [],
+            "textTruncated": false
+          }
+        },
+        "references": [
+          {
+            "label": "S1",
+            "pageTitle": "Ý tưởng nội dung",
+            "text": "Bài so sánh trước và sau"
+          },
+          {
+            "label": "S2",
+            "pageTitle": "Ý tưởng nội dung",
+            "text": "Minigame tặng quà cuối tuần"
+          },
+          {
+            "label": "S3",
+            "pageTitle": "Ý tưởng nội dung",
+            "text": "Chuỗi bài mẹo dùng sản phẩm"
+          }
+        ]
+      },
+      "expect": {
+        "status": [
+          "PLAN_READY"
+        ],
+        "max_operations": 1,
+        "todos_from": [
+          "Bài so sánh trước và sau",
+          "Minigame tặng quà cuối tuần",
+          "Chuỗi bài mẹo dùng sản phẩm"
+        ],
+        "min_todos": 1
+      }
+    },
+    "responses": [
+      "{\"status\":\"PLAN_READY\",\"operationTypes\":[\"INSERT_BLOCKS\"]}",
+      "{\"operations\":[{\"type\":\"INSERT_BLOCKS\",\"parentBlockId\":null,\"afterBlockId\":null,\"blocks\":[{\"type\":\"HEADER\",\"content\":{\"text\":\"Danh sách việc cần làm\"},\"styleConfig\":{\"level\":1}},{\"type\":\"TODO\",\"content\":{\"text\":\"Bài so sánh trước và sau\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Minigame tặng quà cuối tuần\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Chuỗi bài mẹo dùng sản phẩm\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Chuẩn bị release\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Lên kế hoạch nội dung\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Thiết kế banner\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Chạy quảng cáo Facebook\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Viết bài blog\",\"checked\":false}},{\"type\":\"TODO\",\"content\":{\"text\":\"Lên lịch đăng bài\",\"checked\":false}}]}]}"
+    ],
+    "clean_plan": {
+      "schemaVersion": 1,
+      "type": "AI_MODIFICATION_PLAN",
+      "pageId": "d7737eb3-3d50-4e50-8a65-2e600c3ec8ef",
+      "status": "PLAN_READY",
+      "summary": "them danh sach viec can lam",
+      "operations": [
+        {
+          "type": "INSERT_BLOCKS",
+          "parentBlockId": null,
+          "afterBlockId": null,
+          "blocks": [
+            {
+              "type": "HEADER",
+              "content": {
+                "text": "Danh sách việc cần làm"
+              },
+              "styleConfig": {
+                "level": 1
+              }
+            },
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Bài so sánh trước và sau",
+                "checked": false
+              }
+            },
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Minigame tặng quà cuối tuần",
+                "checked": false
+              }
+            },
+            {
+              "type": "TODO",
+              "content": {
+                "text": "Chuỗi bài mẹo dùng sản phẩm",
+                "checked": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

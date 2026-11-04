@@ -261,4 +261,16 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
         return result('MODIFY_PAGE') if request.currentPageId else result('UNCLEAR')
     if text.strip(' .!?') in {'voi', 'giup toi voi', 'sua di', 'abc', '', '🙂', 'lam cho tot hon', 'ok', 'cai do', 'lam tiep di', 'them', 'nhu luc nay'}:
         return result('UNCLEAR')
+    if VAGUE_POINTING.match(text.strip(' .!?')):
+        return result('UNCLEAR')
     return None
+
+
+# Log Ask 2026-10-31 (u13, u14): the whole request is a generic verb and a
+# pointing word ("làm cái đó đi", "fix it"). What it points at is not in the
+# request, open Page or not, so ask instead of letting the model guess OTHER.
+VAGUE_POINTING = re.compile(
+    r'^(?:(?:lam|xu ly|giai quyet|do|fix|handle)\s+)?(?:(?:cai|viec|chuyen|phan)\s+)?'
+    r'(?:do|nay|kia|ay|no|vay|the|that|this|it)'
+    r'(?:\s+(?:di|nhe|nha|giup(?:\s+(?:toi|minh))?|voi|luon|ngay|please))*$'
+)

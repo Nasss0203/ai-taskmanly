@@ -1,0 +1,6 @@
+# Kế hoạch train Colab (T4): what training/teacher.py imports from the app, in
+# its own venv on Colab so it never clashes with Unsloth's packages.
+fastapi==0.141.1
+pydantic==2.13.4
+pydantic-settings==2.12.0
+httpx==0.28.1

@@ -1,0 +1,5 @@
+# Kế hoạch train Colab (T5): generated data, measurements and model files stay out of git.
+data/
+baseline/
+outputs/
+*.gguf

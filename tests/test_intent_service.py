@@ -381,3 +381,34 @@ def test_block_text_edits_are_page_edits(source, context, intent):
     assert result.result.intent == intent
     assert provider.calls == []
 
+
+
+# Log Ask 2026-10-31: "làm cái đó đi" went to the model and came back OTHER
+# ("not supported") instead of a question. "That / this / it" with no object
+# needs context the request does not carry, page open or not.
+@pytest.mark.parametrize('source,context', [
+    ('làm cái đó đi', {}),
+    ('làm cái đó đi', {'currentPageId': 'caller-id'}),
+    ('Làm cái này giúp mình nhé', {}),
+    ('xử lý cái kia luôn', {}),
+    ('giúp tôi làm cái đó', {}),
+    ('làm nó đi', {}),
+    ('fix it', {}),
+    ('do that please', {}),
+])
+def test_bare_pointing_words_are_unclear_without_the_model(source, context):
+    response, provider = run(source, **context)
+    assert response.result.intent == 'UNCLEAR'
+    assert response.result.needsClarification
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize('source,context,intent', [
+    ('Thêm checklist vào trang Q4', {}, 'MODIFY_PAGE'),
+    ('Làm cho tôi một trang kế hoạch', {}, 'CREATE_PAGE'),
+    ('Tóm tắt cái này', {'selectedText': 'Source'}, 'WRITING'),
+    ('Dịch cái này sang tiếng Anh', {'selectedText': 'Source'}, 'WRITING'),
+])
+def test_pointing_words_with_a_real_request_keep_their_intent(source, context, intent):
+    response, _ = run(source, [json.dumps(extraction(intent))], **context)
+    assert response.result.intent == intent
