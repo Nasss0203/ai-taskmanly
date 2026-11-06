@@ -40,6 +40,9 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
 )
 from app.shared.json_parser import parse_json_object
 from app.modules.modification_planner.services.block_delete import plan_block_delete
+from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
+from app.modules.modification_planner.services.explicit_content import mentions_position, parse_explicit_blocks
+from app.modules.modification_planner.services.sentence_text import QUOTES, command_text
 from app.modules.modification_planner.services.block_text import plan_block_text
 from app.modules.modification_planner.services.todo_status import (
     TODO_STATUS_MODEL,
@@ -101,7 +104,21 @@ CHECKLIST_INTENT_TERMS = (
 
 # "checklist gồm a, b và c" -> items a, b, c.
 CHECKLIST_ITEMS_LEAD = re.compile(r"^\s*(?:bao gồm|gồm|là|với)?\s*:?\s*")
+# "checklist chuẩn bị họp gồm a, b" -> name "chuẩn bị họp", items a, b.
+CHECKLIST_ITEMS_MARKER = re.compile(r"\b(?:bao gồm|gồm)\b\s*:?\s*|:\s*")
 CHECKLIST_ITEM_SEPARATOR = re.compile(r"\s*(?:[,;]|\bvà\b)\s*")
+# gp16: the topic of "thêm checklist ôn tập môn Anh (vào cuối trang)", in the user's words.
+CHECKLIST_TERM = re.compile(r"check\s?list|task list|to-?do", re.IGNORECASE)
+TOPIC_POSITION = re.compile(
+    r"\s+(?:(?:vào|ở|tại|dưới|sau|trước|trong)\s+(?:cuối|đầu|phần|mục|heading|tiêu đề|trang|block|dòng|đoạn|toggle)\b"
+    r"|(?:at|to|in|into|under|after|before|below|above|on)\s+the\s)",
+    re.IGNORECASE,
+)
+# A topic still holding a position word was not cut cleanly: keep the model's items.
+TOPIC_UNSURE = re.compile(
+    r"\b(?:under|at|to|in|into|on|after|before|below|above|vào|ở|tại|dưới|sau|trước|trong)\b", re.IGNORECASE,
+)
+TOPIC_ITEM_WORD = re.compile(r"^\s*(?:items?|mục)\b", re.IGNORECASE)
 
 
 class ModificationPlannerService:
@@ -120,6 +137,8 @@ class ModificationPlannerService:
             (plan_todo_status, TODO_STATUS_MODEL),
             (plan_block_text, BLOCK_TEXT_MODEL),
             (plan_block_delete, BLOCK_DELETE_MODEL),
+            # A named section or table the Page lacks is asked back, never guessed.
+            (plan_missing_target, MISSING_TARGET_MODEL),
         ):
             rule_plan = plan_by_rules(request.instruction, request.context)
             if rule_plan is not None:
@@ -187,6 +206,11 @@ class ModificationPlannerService:
                 request.context,
             )
             plan = self._checklist_items_as_todos(plan, request.instruction)
+            plan = self._drop_checklist_name_todo(plan, request.instruction)
+            plan = self._single_topic_checklist(plan, request)
+            plan = self._todo_list_toggles(plan, request.context)
+            plan = self._lock_explicit_content(plan, request)
+            plan = self._default_position(plan, request)
             plan = self._strip_todo_list_markers(plan)
             plan = self._keep_grounded_items(plan, request)
         except (
@@ -524,22 +548,170 @@ class ModificationPlannerService:
         data = plan.model_dump(mode="json", exclude_unset=True)
         changed = False
         for operation in data.get("operations") or []:
-            for index, block in enumerate(operation.get("blocks") or []):
+            if not operation.get("blocks"):
+                continue
+            blocks = []
+            for block in operation["blocks"]:
                 text = (block.get("content") or {}).get("text")
+                lines = [line for line in text.splitlines() if line.strip()] if isinstance(text, str) else []
+                # gp06: several listed items packed in one block ("• a\n• b") -> one TODO each.
                 if (
-                    block.get("type") == "HEADER"
-                    and isinstance(text, str)
-                    and ModificationPlannerService._checklist_item_key(text) in items
+                    block.get("type") in ("HEADER", "TODO")
+                    and (len(lines) > 1 or block.get("type") == "HEADER")
+                    and lines
+                    and all(ModificationPlannerService._checklist_item_key(line) in items for line in lines)
                 ):
-                    operation["blocks"][index] = {
-                        "type": "TODO",
-                        "content": {"text": strip_list_marker(text), "checked": False},
-                    }
+                    blocks.extend(
+                        {"type": "TODO", "content": {"text": strip_list_marker(line), "checked": False}}
+                        for line in lines
+                    )
                     changed = True
+                else:
+                    blocks.append(block)
+            operation["blocks"] = blocks
         return type(plan).model_validate(data) if changed else plan
 
     @staticmethod
-    def _listed_checklist_items(instruction: str) -> set[str]:
+    def _lock_explicit_content(plan: Any, request: ModificationPlannerRequest) -> Any:
+        # gp31/gp32: the model obeyed words inside the content. Blocks the sentence
+        # spells out are taken by rule; the model only chose where they go.
+        if request.references or plan.status != "PLAN_READY":
+            return plan
+        blocks = parse_explicit_blocks(request.instruction)
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        operations = data.get("operations") or []
+        if blocks is None or not operations or any(op.get("type") != "INSERT_BLOCKS" for op in operations):
+            return plan
+        current = [(block.get("type"), (block.get("content") or {}).get("text"))
+                   for op in operations for block in op.get("blocks") or []]
+        if len(operations) == 1 and current == blocks:
+            return plan
+        levels = [block["styleConfig"] for op in operations for block in op.get("blocks") or []
+                  if block.get("type") == "HEADER" and block.get("styleConfig")]
+        locked = []
+        for kind, text in blocks:
+            if kind == "TODO":
+                locked.append({"type": "TODO", "content": {"text": text, "checked": False}})
+            elif kind == "HEADER":
+                locked.append({"type": "HEADER", "content": {"text": text},
+                               **({"styleConfig": levels.pop(0)} if levels else {})})
+            else:
+                locked.append({"type": kind, "content": {"text": text}})
+        first = operations[0]
+        data["operations"] = [{"type": "INSERT_BLOCKS", "parentBlockId": first.get("parentBlockId"),
+                               "afterBlockId": first.get("afterBlockId"), "blocks": locked}]
+        logger.info("modification_planner_content_locked blocks=%d model_blocks=%d", len(locked), len(current))
+        locked_plan = type(plan).model_validate(data)
+        validate_modification_plan_semantics(locked_plan, request.context)
+        return locked_plan
+
+    @staticmethod
+    def _default_position(plan: Any, request: ModificationPlannerRequest) -> Any:
+        # Kế hoạch vị trí mặc định (B, DB1 = A): a sentence naming no place goes
+        # at the end of the Page, after its last root block. Any place word keeps
+        # the model's choice; references (M8) keep their own placement.
+        if request.references or plan.status != "PLAN_READY":
+            return plan
+        if mentions_position(request.instruction, request.context.page.title):
+            return plan
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        operations = data.get("operations") or []
+        if len(operations) != 1 or operations[0].get("type") != "INSERT_BLOCKS":
+            return plan
+        roots = [block for block in request.context.blocks if block.parentBlockId is None]
+        last = max(roots, key=lambda block: block.orderIndex).id if roots else None
+        operation = operations[0]
+        if operation.get("parentBlockId") is None and operation.get("afterBlockId") in (None, last):
+            return plan
+        logger.info("modification_planner_default_position moved=1")
+        operation["parentBlockId"] = None
+        operation["afterBlockId"] = last
+        moved = type(plan).model_validate(data)
+        validate_modification_plan_semantics(moved, request.context)
+        return moved
+
+    def _single_topic_checklist(self, plan: Any, request: ModificationPlannerRequest) -> Any:
+        # gp16: a checklist given only a topic is one TODO (prompt rule); models still
+        # invent steps. Items from a source Page (M8) and heading requests are left alone.
+        if request.references or self._requests_heading(request.instruction):
+            return plan
+        topic = self._checklist_topic(request.instruction)
+        if topic is None:
+            return plan
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        holders = [op for op in data.get("operations") or [] if any(
+            block.get("type") == "TODO" for block in op.get("blocks") or [])]
+        if len(holders) != 1 or len(holders[0]["blocks"]) < 2 or any(
+                block.get("type") != "TODO" for block in holders[0]["blocks"]):
+            return plan
+        holders[0]["blocks"] = [{"type": "TODO", "content": {"text": topic, "checked": False}}]
+        return type(plan).model_validate(data)
+
+    @staticmethod
+    def _checklist_topic(instruction: str) -> str | None:
+        """The one topic of a checklist sentence without listed items, else None."""
+        text = unicodedata.normalize("NFC", command_text(instruction))
+        # The first term: "to-do X ngay sau to-do Y" is about X, never Y.
+        term = CHECKLIST_TERM.search(text)
+        if term is None:
+            return None
+        tail = TOPIC_ITEM_WORD.sub("", text[term.end():], count=1)
+        if CHECKLIST_ITEMS_MARKER.search(tail.casefold()):
+            return None
+        position = TOPIC_POSITION.search(tail)
+        if position:
+            tail = tail[:position.start()]
+        topic = CHECKLIST_ITEMS_LEAD.sub("", tail, count=1).strip(" " + QUOTES + ".!,")
+        if not topic or len(CHECKLIST_ITEM_SEPARATOR.split(topic)) > 1 or TOPIC_UNSURE.search(topic):
+            return None
+        return topic[0].upper() + topic[1:]
+
+    @staticmethod
+    def _todo_list_toggles(plan: Any, context: Any) -> Any:
+        # gp22: an inserted TOGGLE never has children here; placed in a to-do list
+        # ("add Toothbrush to the Packing list") it is one more TODO.
+        types = {block.id: block.type for block in context.blocks}
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        changed = False
+        for operation in data.get("operations") or []:
+            previous = types.get(operation.get("afterBlockId") or "")
+            for index, block in enumerate(operation.get("blocks") or []):
+                text = (block.get("content") or {}).get("text")
+                if block.get("type") == "TOGGLE" and previous == "TODO" and isinstance(text, str):
+                    operation["blocks"][index] = {
+                        "type": "TODO", "content": {"text": strip_list_marker(text), "checked": False},
+                    }
+                    changed = True
+                previous = operation["blocks"][index].get("type")
+        return type(plan).model_validate(data) if changed else plan
+
+    @staticmethod
+    def _drop_checklist_name_todo(plan: Any, instruction: str) -> Any:
+        # gp01: in "checklist chuẩn bị họp gồm a, b" models also add the name as a TODO.
+        name = ModificationPlannerService._checklist_name(instruction)
+        items = ModificationPlannerService._listed_checklist_items(instruction)
+        if not name or not items or name in items:
+            return plan
+        data = plan.model_dump(mode="json", exclude_unset=True)
+        changed = False
+        for operation in data.get("operations") or []:
+            blocks = operation.get("blocks") or []
+            kept = [
+                block for block in blocks
+                if not (
+                    block.get("type") == "TODO"
+                    and isinstance((block.get("content") or {}).get("text"), str)
+                    and ModificationPlannerService._checklist_item_key(block["content"]["text"]) == name
+                )
+            ]
+            if kept and len(kept) < len(blocks):
+                operation["blocks"] = kept
+                changed = True
+        return type(plan).model_validate(data) if changed else plan
+
+    @staticmethod
+    def _split_checklist(instruction: str) -> tuple[str, str] | None:
+        """Text after the last checklist term, as (name, listed items)."""
         normalized_instruction = unicodedata.normalize("NFC", instruction).casefold()
         positions = [
             normalized_instruction.rfind(term) + len(term)
@@ -547,11 +719,26 @@ class ModificationPlannerService:
             if term in normalized_instruction
         ]
         if not positions:
+            return None
+        tail = normalized_instruction[max(positions):]
+        marker = CHECKLIST_ITEMS_MARKER.search(tail)
+        if marker is None:
+            return "", CHECKLIST_ITEMS_LEAD.sub("", tail, count=1)
+        return tail[:marker.start()], tail[marker.end():]
+
+    @staticmethod
+    def _checklist_name(instruction: str) -> str:
+        split = ModificationPlannerService._split_checklist(instruction)
+        return ModificationPlannerService._checklist_item_key(split[0]) if split else ""
+
+    @staticmethod
+    def _listed_checklist_items(instruction: str) -> set[str]:
+        split = ModificationPlannerService._split_checklist(instruction)
+        if split is None:
             return set()
-        listed = CHECKLIST_ITEMS_LEAD.sub("", normalized_instruction[max(positions):], count=1)
         return {
             key
-            for item in CHECKLIST_ITEM_SEPARATOR.split(listed)
+            for item in CHECKLIST_ITEM_SEPARATOR.split(split[1])
             if (key := ModificationPlannerService._checklist_item_key(item))
         }
 

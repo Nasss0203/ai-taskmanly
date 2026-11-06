@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ollama_continue_model: str | None = None
     ollama_page_composition_model: str | None = None
     ollama_modification_planner_model: str | None = None
+    # Intent and page-intent (short structured reads); unset keeps OLLAMA_MODEL.
+    ollama_intent_model: str | None = None
 
     ollama_num_ctx: int = 16384
 

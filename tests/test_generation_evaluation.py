@@ -4,7 +4,7 @@ from scripts.evaluate_generation import CONTEXTS, DEFAULT_CASES, check_compositi
 KNOWN_EXPECTATIONS = {
     "title", "todo_texts", "min_todos", "no_todos", "no_childless_toggles", "min_toggles", "databases",
     "property_types", "select_options", "status", "max_operations", "operation_types", "block_types",
-    "texts_contain", "max_new_blocks", "after_block", "row_titles", "row_option", "todo_updates", "text_edits", "deletes",
+    "texts_contain", "max_new_blocks", "after_block", "parent_block", "row_titles", "row_option", "todo_updates", "text_edits", "deletes",
 }
 
 
@@ -48,6 +48,17 @@ def test_plan_checks_detect_copies_splits_and_inventions() -> None:
     assert check_plan(split_copy, {"max_operations": 1, "max_new_blocks": 1, "after_block": ["b5"]}, context) == [
         "max_operations", "max_new_blocks", "no_copy", "after_block",
     ]
+
+
+def test_plan_parent_check_requires_the_toggle() -> None:
+    context = CONTEXTS["study"]
+    plan = {"status": "PLAN_READY", "operations": [
+        {"type": "INSERT_BLOCKS", "parentBlockId": "s5", "afterBlockId": "s6",
+         "blocks": [{"type": "TEXT", "content": {"text": "Đề cương"}}]},
+    ]}
+    assert check_plan(plan, {"parent_block": ["s5"]}, context) == []
+    plan["operations"][0]["parentBlockId"] = None
+    assert check_plan(plan, {"parent_block": ["s5"]}, context) == ["parent_block"]
 
 
 def test_plan_row_checks_use_title_and_select_properties() -> None:

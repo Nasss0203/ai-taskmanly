@@ -2474,8 +2474,198 @@ def test_heading_and_checklist_turns_listed_items_into_todos() -> None:
     ])
     blocks = response.result.operations[0].blocks
     assert [block.type for block in blocks] == ["HEADER", "TODO", "TODO"]
-    assert [block.content.text for block in blocks] == ["Việc tuần sau", "Cập nhật báo cáo", "Gửi email."]
+    # Content lock (gp31/gp32): the items are the user's words, not the model's "2. Gửi email.".
+    assert [block.content.text for block in blocks] == ["Việc tuần sau", "Cập nhật báo cáo", "Gửi email"]
     assert blocks[1].content.checked is False
+    assert blocks[0].styleConfig.level == 2
+
+
+def test_heading_and_checklist_splits_a_multiline_header_of_listed_items() -> None:
+    # Live gp06 output (qwen3:4b-instruct, 2/3 runs): both items packed in one bulleted HEADER.
+    response, _ = run_insert_plan(HEADING_AND_CHECKLIST, [
+        {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},
+        {"type": "HEADER", "content": {"text": "• Cập nhật báo cáo\n• Gửi email"}, "styleConfig": {"level": 3}},
+    ])
+    blocks = response.result.operations[0].blocks
+    assert [block.type for block in blocks] == ["HEADER", "TODO", "TODO"]
+    assert [block.content.text for block in blocks] == ["Việc tuần sau", "Cập nhật báo cáo", "Gửi email"]
+
+
+def test_checklist_splits_a_multiline_todo_of_listed_items() -> None:
+    response, _ = run_insert_plan("thêm checklist gồm cập nhật báo cáo, gửi email", [
+        {"type": "TODO", "content": {"text": "1. Cập nhật báo cáo\n2. Gửi email", "checked": False}},
+    ])
+    assert [block.content.text for block in response.result.operations[0].blocks] == [
+        "Cập nhật báo cáo", "Gửi email",
+    ]
+
+
+def test_multiline_header_with_an_unlisted_line_is_kept() -> None:
+    # The multiline split leaves this HEADER alone; the content lock then
+    # rebuilds the blocks the sentence spells out.
+    from app.modules.modification_planner.schemas.modification_planner_schema import AiModificationPlan
+
+    plan = TypeAdapter(AiModificationPlan).validate_python({
+        "schemaVersion": 1, "type": "AI_MODIFICATION_PLAN", "pageId": make_context()["page"]["id"],
+        "status": "PLAN_READY", "summary": "s",
+        "operations": [{"type": "INSERT_BLOCKS", "parentBlockId": None, "afterBlockId": "block-toggle", "blocks": [
+            {"type": "HEADER", "content": {"text": "Việc tuần sau\n• Gửi email"}, "styleConfig": {"level": 2}},
+            {"type": "TODO", "content": {"text": "Cập nhật báo cáo", "checked": False}},
+        ]}],
+    })
+    kept = ModificationPlannerService._checklist_items_as_todos(plan, HEADING_AND_CHECKLIST)
+    assert [block.type for block in kept.operations[0].blocks] == ["HEADER", "TODO"]
+    response, _ = run_insert_plan(HEADING_AND_CHECKLIST, [
+        {"type": "HEADER", "content": {"text": "Việc tuần sau\n• Gửi email"}, "styleConfig": {"level": 2}},
+        {"type": "TODO", "content": {"text": "Cập nhật báo cáo", "checked": False}},
+    ])
+    assert [(block.type, block.content.text) for block in response.result.operations[0].blocks] == [
+        ("HEADER", "Việc tuần sau"), ("TODO", "Cập nhật báo cáo"), ("TODO", "Gửi email"),
+    ]
+
+
+TOPIC_ONLY_STEPS = [
+    {"type": "TODO", "content": {"text": "Ôn từ vựng", "checked": False}},
+    {"type": "TODO", "content": {"text": "Luyện ngữ pháp", "checked": False}},
+    {"type": "TODO", "content": {"text": "Luyện nghe và nói", "checked": False}},
+]
+
+
+@pytest.mark.parametrize(("instruction", "topic"), [
+    ("thêm checklist ôn tập môn Anh", "Ôn tập môn Anh"),                   # gp16 live output
+    ("hãy thêm checklist ôn tập môn Anh vào cuối trang nhé", "Ôn tập môn Anh"),
+    ("thêm checklist ôn tập môn Anh vào trang Ôn thi cuối kỳ", "Ôn tập môn Anh"),
+    ("add a checklist packing for the beach at the end of the page", "Packing for the beach"),
+])
+def test_topic_only_checklist_keeps_one_todo_named_by_the_user(instruction: str, topic: str) -> None:
+    response, _ = run_insert_plan(instruction, TOPIC_ONLY_STEPS)
+    assert [(block.type, block.content.text) for block in response.result.operations[0].blocks] == [("TODO", topic)]
+
+
+@pytest.mark.parametrize("instruction", [
+    "thêm checklist gồm ôn từ vựng, luyện ngữ pháp, luyện nghe và nói",   # listed items stay
+    "thêm checklist ôn từ vựng, luyện ngữ pháp, luyện nghe và nói",
+    "Add a checklist item under Details.",                                # position not cut cleanly: unsure
+    "add a checklist how to cook pho",
+])
+def test_listed_or_mixed_checklists_are_not_collapsed(instruction: str) -> None:
+    # "luyện nghe và nói" may be one item, so neither the topic rule nor the
+    # content lock touches these: the model's three items stay.
+    response, _ = run_insert_plan(instruction, [
+        *([{"type": "HEADER", "content": {"text": "Môn Anh"}, "styleConfig": {"level": 2}}] if "heading" in instruction else []),
+        *TOPIC_ONLY_STEPS,
+    ])
+    assert sum(block.type == "TODO" for block in response.result.operations[0].blocks) == 3
+
+
+def test_topic_only_checklist_with_a_source_page_is_not_collapsed() -> None:
+    # M8: "checklist các bug blocker dựa trên trang X" takes its items from the source.
+    batch = make_insert_batch()
+    batch["operations"][0].update(parentBlockId=None, afterBlockId="block-toggle", blocks=TOPIC_ONLY_STEPS)
+    provider = FakeLLMProvider([
+        json.dumps(make_route("INSERT_BLOCKS"), ensure_ascii=False),
+        json.dumps(batch, ensure_ascii=False),
+    ])
+    request = ModificationPlannerRequest.model_validate({
+        "instruction": "thêm checklist ôn tập dựa trên trang Tài liệu",
+        "context": make_context(),
+        "references": [{"label": "S1", "pageTitle": "Tài liệu",
+                        "text": "Ôn từ vựng. Luyện ngữ pháp. Luyện nghe và nói."}],
+    })
+    response = asyncio.run(ModificationPlannerService(provider).process(request))
+    assert len(response.result.operations[0].blocks) == 3
+
+
+def run_trip_plan(instruction: str, after: str, blocks: list[dict[str, Any]]):
+    from scripts.evaluate_generation import CONTEXTS
+
+    batch = {"operations": [{"type": "INSERT_BLOCKS", "parentBlockId": None, "afterBlockId": after, "blocks": blocks}]}
+    provider = FakeLLMProvider([
+        json.dumps(make_route("INSERT_BLOCKS"), ensure_ascii=False),
+        json.dumps(batch, ensure_ascii=False),
+    ])
+    request = ModificationPlannerRequest(instruction=instruction, context=CONTEXTS["trip"])
+    return asyncio.run(ModificationPlannerService(provider).process(request))
+
+
+def test_toggle_inserted_in_a_todo_list_becomes_a_todo() -> None:
+    # Live gp22 output: "add Toothbrush to the Packing list" -> an empty TOGGLE after "Phone charger".
+    response = run_trip_plan("add Toothbrush to the Packing list", "e2", [
+        {"type": "TOGGLE", "content": {"text": "Toothbrush"}},
+    ])
+    block = response.result.operations[0].blocks[0]
+    assert (block.type, block.content.text, block.content.checked) == ("TODO", "Toothbrush", False)
+
+
+def test_toggle_after_a_text_block_stays_a_toggle() -> None:
+    response = run_trip_plan("add a toggle Day 2 after Day 1", "e4", [
+        {"type": "TOGGLE", "content": {"text": "Day 2"}},
+    ])
+    assert response.result.operations[0].blocks[0].type == "TOGGLE"
+
+
+NAMED_CHECKLIST = "thêm checklist chuẩn bị họp gồm in tài liệu, đặt phòng, gửi lịch mời"
+
+
+def test_named_checklist_drops_the_name_rendered_as_a_todo() -> None:
+    # Live gp01 output (qwen3:4b-instruct, 1/8 runs): the checklist name became the first TODO.
+    response, _ = run_insert_plan(NAMED_CHECKLIST, [
+        {"type": "TODO", "content": {"text": "Chuẩn bị họp", "checked": False}},
+        {"type": "TODO", "content": {"text": "In tài liệu", "checked": False}},
+        {"type": "TODO", "content": {"text": "Đặt phòng", "checked": False}},
+        {"type": "TODO", "content": {"text": "Gửi lịch mời", "checked": False}},
+    ])
+    blocks = response.result.operations[0].blocks
+    assert [block.content.text for block in blocks] == ["In tài liệu", "Đặt phòng", "Gửi lịch mời"]
+
+
+def test_named_checklist_lists_items_after_gom() -> None:
+    assert ModificationPlannerService._listed_checklist_items(NAMED_CHECKLIST) == {
+        "in tài liệu", "đặt phòng", "gửi lịch mời",
+    }
+    assert ModificationPlannerService._checklist_name(NAMED_CHECKLIST) == "chuẩn bị họp"
+
+
+def test_named_checklist_turns_listed_header_items_into_todos() -> None:
+    response, _ = run_insert_plan("thêm heading Họp và checklist chuẩn bị họp gồm in tài liệu, đặt phòng", [
+        {"type": "HEADER", "content": {"text": "Họp"}, "styleConfig": {"level": 2}},
+        {"type": "HEADER", "content": {"text": "In tài liệu"}, "styleConfig": {"level": 3}},
+        {"type": "TODO", "content": {"text": "Đặt phòng", "checked": False}},
+    ])
+    assert [block.type for block in response.result.operations[0].blocks] == ["HEADER", "TODO", "TODO"]
+
+
+def test_checklist_keeps_a_name_todo_when_it_is_also_listed() -> None:
+    # "checklist gồm chuẩn bị họp, đặt phòng": no name, every item stays.
+    response, _ = run_insert_plan("thêm checklist gồm chuẩn bị họp, đặt phòng", [
+        {"type": "TODO", "content": {"text": "Chuẩn bị họp", "checked": False}},
+        {"type": "TODO", "content": {"text": "Đặt phòng", "checked": False}},
+    ])
+    assert len(response.result.operations[0].blocks) == 2
+
+
+def test_named_checklist_keeps_the_name_todo_when_it_is_the_only_item() -> None:
+    plan = run_insert_plan(NAMED_CHECKLIST, [
+        {"type": "TODO", "content": {"text": "Chuẩn bị họp", "checked": False}},
+    ])[0].result
+    # The name rule alone never empties the draft …
+    assert len(ModificationPlannerService._drop_checklist_name_todo(plan, NAMED_CHECKLIST).operations[0].blocks) >= 1
+    # … and the content lock puts back the three listed items.
+    assert [block.content.text for block in plan.operations[0].blocks] == ["In tài liệu", "Đặt phòng", "Gửi lịch mời"]
+
+
+@pytest.mark.parametrize(("instruction", "expected"), [
+    # gp19: the model invented three to-dos for one; never the anchor's name.
+    ("thêm to-do Ôn chương 4 ngay sau to-do Ôn chương 3", [("TODO", "Ôn chương 4")]),
+    # D4: a heading with a topic-only checklist is the heading and one to-do.
+    ("thêm heading Môn Anh và checklist ôn tập", [("HEADER", "Môn Anh"), ("TODO", "Ôn tập")]),
+])
+def test_content_lock_keeps_only_the_spelled_out_blocks(instruction: str, expected: list) -> None:
+    response, _ = run_insert_plan(instruction, [
+        *([{"type": "HEADER", "content": {"text": "Môn Anh"}, "styleConfig": {"level": 2}}] if "heading" in instruction else []),
+        *TOPIC_ONLY_STEPS,
+    ])
+    assert [(block.type, block.content.text) for block in response.result.operations[0].blocks] == expected
 
 
 def test_normalizers_keep_headers_without_style_config() -> None:

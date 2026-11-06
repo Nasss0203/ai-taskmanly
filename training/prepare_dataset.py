@@ -23,6 +23,7 @@ from typing import Any
 
 from app.modules.modification_planner.schemas.modification_planner_schema import ModificationPlannerRequest
 from app.modules.modification_planner.services.block_delete import plan_block_delete
+from app.modules.modification_planner.services.missing_target import plan_missing_target
 from app.modules.modification_planner.services.block_text import plan_block_text
 from app.modules.modification_planner.services.reference_checklist import plan_reference_checklist
 from app.modules.modification_planner.services.todo_status import plan_todo_status
@@ -35,7 +36,7 @@ INTENT_CASES = ROOT.parent / "docs" / "quy trình AI" / "intent_cases.jsonl"
 
 # Pages and sentences of the evaluation sets (gp/gc, I8 in check-based-on-drafts.ts).
 RESERVED_TITLES = {"hội họp tuần", "sub man", "release 2.0", "bug tracker", "ghi chú qa",
-                   "công thức nấu ăn", "du lịch đà lạt"}
+                   "công thức nấu ăn", "du lịch đà lạt", "ôn thi cuối kỳ", "trip to hanoi", "đọc sách 2026"}
 # Topics of those sets: no training sentence or page may be about them.
 RESERVED_WORDS = re.compile(r"\b(?:release|bug|qa|hop|phat hanh|changelog|regression|hoi quy)\b")
 I8_SENTENCES = (
@@ -377,7 +378,7 @@ def reserved_sentences() -> set[str]:
 
 def answered_by_rules(request: ModificationPlannerRequest) -> bool:
     return any(plan(request.instruction, request.context) is not None
-               for plan in (plan_todo_status, plan_block_text, plan_block_delete)) or (
+               for plan in (plan_todo_status, plan_block_text, plan_block_delete, plan_missing_target)) or (
         plan_reference_checklist(request.instruction, request.context.page.id, request.references) is not None)
 
 

@@ -161,8 +161,22 @@ async def lifespan(application: FastAPI):
                 modification_planner_provider
             )
         )
-        application.state.page_intent_service = PageIntentService(provider)
-        application.state.intent_service = IntentService(provider)
+        # Kế hoạch tốc độ Ask (A.2): page-intent on the default CPU copy took
+        # ~71% of an Ask. OLLAMA_INTENT_MODEL moves intent and page-intent to
+        # another model; its placement still comes from OLLAMA_MODEL_NUM_GPU,
+        # so naming the planner's model shares its loaded copy.
+        intent_provider = provider
+        if (
+            settings.llm_provider == "ollama"
+            and settings.ollama_intent_model
+            and settings.ollama_intent_model != settings.ollama_model
+        ):
+            intent_provider = get_or_create_ollama_provider(
+                settings.ollama_intent_model,
+                settings.ollama_num_gpu,
+            )
+        application.state.page_intent_service = PageIntentService(intent_provider)
+        application.state.intent_service = IntentService(intent_provider)
 
         embedding_provider = create_embedding_provider(settings)
         exit_stack.push_async_callback(embedding_provider.close)

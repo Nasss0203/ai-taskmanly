@@ -99,6 +99,40 @@ CONTEXTS: dict[str, dict[str, Any]] = {
                                   {"propertyId": "p-status", "position": "1", "visible": True, "width": None}]}],
         "rows": [{"id": "row-1", "databaseId": "db-tasks", "values": {"p-name": "Chuẩn bị changelog", "p-status": "o-done"}}],
     }], [{"blockId": "r1", "databaseId": "db-tasks", "viewId": "v-table"}]),
+    # 2026-11-05: wider planner set (sections, toggle child, English page, second database).
+    "study": _context("Ôn thi cuối kỳ", [
+        _block("s0", "HEADER", "Môn Toán", 0),
+        _todo("s1", "Làm đề năm 2023", False, 1),
+        _todo("s2", "Ôn chương 3", False, 2),
+        _block("s3", "HEADER", "Môn Lý", 3),
+        _block("s4", "TEXT", "Ôn công thức dao động điều hoà", 4),
+        _block("s5", "TOGGLE", "Tài liệu tham khảo", 5),
+        {**_block("s6", "TEXT", "Sách giáo khoa lớp 12", 0), "parentBlockId": "s5"},
+    ], [], []),
+    "trip": _context("Trip to Hanoi", [
+        _block("e0", "HEADER", "Packing", 0),
+        _todo("e1", "Passport", False, 1),
+        _todo("e2", "Phone charger", False, 2),
+        _block("e3", "HEADER", "Itinerary", 3),
+        _block("e4", "TEXT", "Day 1: Old Quarter walking tour", 4),
+    ], [], []),
+    "reading": _context("Đọc sách 2026", [
+        _block("k0", "HEADER", "Danh sách đọc", 0),
+        {**_block("k1", "DATABASE_VIEW", "", 1), "content": None},
+    ], [{
+        "id": "db-books", "pageId": "page-1", "name": "Sách",
+        "properties": [
+            _property("q-name", "Tên sách", "TITLE", "0"),
+            _property("q-state", "Tình trạng", "SELECT", "1", [
+                {"id": "o-reading", "name": "Đang đọc", "color": None, "position": "0"},
+                {"id": "o-read", "name": "Đã đọc", "color": None, "position": "1"},
+            ]),
+        ],
+        "views": [{"id": "v-books", "databaseId": "db-books", "name": "Bảng", "type": "TABLE", "position": "0",
+                   "properties": [{"propertyId": "q-name", "position": "0", "visible": True, "width": None},
+                                  {"propertyId": "q-state", "position": "1", "visible": True, "width": None}]}],
+        "rows": [{"id": "row-b1", "databaseId": "db-books", "values": {"q-name": "Nhà giả kim", "q-state": "o-read"}}],
+    }], [{"blockId": "k1", "databaseId": "db-books", "viewId": "v-books"}]),
 }
 
 
@@ -177,6 +211,9 @@ def check_plan(plan: dict[str, Any], expect: dict[str, Any], context: dict[str, 
     if "after_block" in expect and any(op.get("afterBlockId") not in expect["after_block"]
                                        for op in operations if op.get("type") == "INSERT_BLOCKS"):
         failed.append("after_block")
+    if "parent_block" in expect and any(op.get("parentBlockId") not in expect["parent_block"]
+                                        for op in operations if op.get("type") == "INSERT_BLOCKS"):
+        failed.append("parent_block")
     properties = [p for db in context["databases"] for p in db["properties"]]
     title_ids = {p["id"] for p in properties if p["type"] == "TITLE"}
     select_ids = {p["id"] for p in properties if p["type"] == "SELECT"}
