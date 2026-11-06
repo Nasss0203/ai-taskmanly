@@ -28,11 +28,12 @@ INSERT = re.compile(r"^(?:thêm|chèn|bổ sung|ghi thêm|add|insert|append)\s+"
 _QTY = r"(?:(?:một|vài|các|những|a|an|the|new|mới|another|\d+)\s+)*"
 # Longest spellings first; "checklist" may follow a one-word name ("a QA checklist").
 _KINDS = (
-    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|việc cần làm"),
+    # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
+    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|việc cần làm|danh sách"),
     ("HEADER", r"heading|tiêu đề"),
     ("TODO", r"to-do|todo|việc"),
     ("QUOTE", r"trích dẫn|quote"),
-    ("TEXT", r"đoạn văn bản|đoạn văn|đoạn|paragraph|text|dòng chữ|dòng|line"),
+    ("TEXT", r"đoạn văn bản|đoạn văn|đoạn|paragraph|text|dòng chữ|dòng|line|ghi chú"),
 )
 _KIND = "|".join(pattern for _, pattern in _KINDS)
 OBJECT = re.compile(

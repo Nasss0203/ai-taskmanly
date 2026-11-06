@@ -2439,7 +2439,7 @@ def run_insert_plan(instruction: str, blocks: list[dict[str, Any]]):
 HEADING_AND_CHECKLIST = "thêm heading Việc tuần sau và checklist gồm cập nhật báo cáo, gửi email"
 
 
-def test_heading_and_checklist_keeps_the_heading() -> None:
+def test_heading_and_checklist_keeps_the_heading(model_path) -> None:
     # gp06: the TODO-only checklist schema turned the requested heading into a TODO.
     response, provider = run_insert_plan(HEADING_AND_CHECKLIST, [
         {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},
@@ -2450,14 +2450,14 @@ def test_heading_and_checklist_keeps_the_heading() -> None:
     assert provider.calls[1]["response_schema"] == CHECKLIST_WITH_HEADING_INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
 
 
-def test_checklist_without_heading_still_requires_todo_only() -> None:
+def test_checklist_without_heading_still_requires_todo_only(model_path) -> None:
     _, provider = run_insert_plan("thêm checklist gồm cập nhật báo cáo", [
         {"type": "TODO", "content": {"text": "Cập nhật báo cáo", "checked": False}},
     ])
     assert provider.calls[1]["response_schema"] == CHECKLIST_INSERT_BLOCKS_BATCH_ADAPTER.json_schema()
 
 
-def test_heading_and_checklist_still_rejects_toggle_items() -> None:
+def test_heading_and_checklist_still_rejects_toggle_items(model_path) -> None:
     with pytest.raises(InvalidLLMResponseError):
         run_insert_plan(HEADING_AND_CHECKLIST, [
             {"type": "HEADER", "content": {"text": "Việc tuần sau"}, "styleConfig": {"level": 2}},

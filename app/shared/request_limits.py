@@ -20,6 +20,12 @@ MAX_CONTEXT_DEPTH = 12
 MAX_CONTEXT_NODES = 1000
 MAX_BODY_BYTES = 65536
 MAX_JSON_DEPTH = MAX_CONTEXT_DEPTH + 1  # request wrapper
+# Kế hoạch trang dài (E3): a Page's own context for the planner (≤ 200 blocks in
+# NestJS). Each text stays ≤ MAX_CONTEXT_BYTES; the prompt gets only what fits
+# its token budget (context_window.py). Below MAX_BODY_BYTES with references.
+MAX_PAGE_CONTEXT_BYTES = 56000
+MAX_PAGE_CONTEXT_NODES = 8000
+MAX_PAGE_INPUT_BYTES = 58000
 
 
 def require_non_blank(value: str) -> str:
@@ -35,7 +41,7 @@ def validate_input_budget(value: Any) -> Any:
     return value
 
 
-def validate_context(value: Any) -> Any:
+def _bounded_context(value: Any, max_bytes: int, max_nodes: int) -> Any:
     if value is None:
         return value
     original = value
@@ -48,13 +54,13 @@ def validate_context(value: Any) -> Any:
     while stack:
         item, depth = stack.pop()
         nodes += 1
-        if nodes > MAX_CONTEXT_NODES:
-            raise ValueError("Context exceeds the 1000-node limit.")
+        if nodes > max_nodes:
+            raise ValueError(f"Context exceeds the {max_nodes}-node limit.")
         if isinstance(item, (dict, list, tuple)):
             if depth > MAX_CONTEXT_DEPTH:
                 raise ValueError("Context exceeds the 12-level nesting limit.")
-            if len(item) > MAX_CONTEXT_NODES:
-                raise ValueError("Context exceeds the 1000-node limit.")
+            if len(item) > max_nodes:
+                raise ValueError(f"Context exceeds the {max_nodes}-node limit.")
             if isinstance(item, dict):
                 for key in item:
                     if not isinstance(key, str) or len(key) > MAX_CONTEXT_BYTES:
@@ -64,14 +70,30 @@ def validate_context(value: Any) -> Any:
                 children = item
             stack.extend((child, depth + 1) for child in children)
         elif isinstance(item, str) and len(item) > MAX_CONTEXT_BYTES:
-            raise ValueError("Context exceeds the 8000-byte UTF-8 limit.")
+            raise ValueError(f"Context exceeds the {MAX_CONTEXT_BYTES}-byte UTF-8 limit.")
     try:
         encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
     except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
         raise ValueError("Context must contain bounded JSON data.") from exc
-    if len(encoded) > MAX_CONTEXT_BYTES:
-        raise ValueError("Context exceeds the 8000-byte UTF-8 limit.")
+    if len(encoded) > max_bytes:
+        raise ValueError(f"Context exceeds the {max_bytes}-byte UTF-8 limit.")
     return original
+
+
+def validate_context(value: Any) -> Any:
+    return _bounded_context(value, MAX_CONTEXT_BYTES, MAX_CONTEXT_NODES)
+
+
+def validate_page_context(value: Any) -> Any:
+    """A Page's own context for the planner (kế hoạch trang dài, E3)."""
+    return _bounded_context(value, MAX_PAGE_CONTEXT_BYTES, MAX_PAGE_CONTEXT_NODES)
+
+
+def validate_page_input_budget(value: Any, max_bytes: int = MAX_PAGE_INPUT_BYTES) -> Any:
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > max_bytes:
+        raise ValueError(f"Combined AI input exceeds the {max_bytes}-byte UTF-8 budget.")
+    return value
 
 
 Instruction = Annotated[

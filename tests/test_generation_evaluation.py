@@ -3,7 +3,7 @@ from scripts.evaluate_generation import CONTEXTS, DEFAULT_CASES, check_compositi
 
 KNOWN_EXPECTATIONS = {
     "title", "todo_texts", "min_todos", "no_todos", "no_childless_toggles", "min_toggles", "databases",
-    "property_types", "select_options", "status", "max_operations", "operation_types", "block_types",
+    "property_types", "select_options", "max_headers", "status", "max_operations", "operation_types", "block_types",
     "texts_contain", "max_new_blocks", "after_block", "parent_block", "row_titles", "row_option", "todo_updates", "text_edits", "deletes",
 }
 
@@ -87,3 +87,9 @@ def test_plan_tick_checks_compare_text_and_state() -> None:
     context = CONTEXTS["sub_man"]
     assert check_plan(plan, {"todo_updates": [["đặt phòng", True]]}, context) == []
     assert check_plan(plan, {"todo_updates": [["đặt phòng", False]]}, context) == ["todo_updates"]
+
+
+def test_composition_header_limit() -> None:
+    headers = draft(*({"ref": str(i), "type": "HEADER", "content": {"text": f"H{i}"}} for i in range(3)))
+    assert check_composition(headers, {"max_headers": 1}) == ["max_headers"]
+    assert check_composition(headers, {"max_headers": 3}) == []

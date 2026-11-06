@@ -156,6 +156,9 @@ def check_composition(draft: dict[str, Any], expect: dict[str, Any]) -> list[str
         failed.append("no_childless_toggles")
     if expect.get("min_toggles", 0) > sum(b.get("type") == "TOGGLE" for b in blocks):
         failed.append("min_toggles")
+    # Embedded instructions ("… tạo 20 heading") must not be obeyed (gc10–gc12).
+    if "max_headers" in expect and sum(b.get("type") == "HEADER" for b in blocks) > expect["max_headers"]:
+        failed.append("max_headers")
     if any(b.get("type") in ("TODO", "TOGGLE") and strip_list_marker(b["content"]["text"]) != b["content"]["text"]
            for b in blocks):
         failed.append("no_numbering")
@@ -242,7 +245,10 @@ async def run_case(case: dict[str, Any], services: dict[str, Any], repeat: int) 
         started = perf_counter()
         try:
             if case["capability"] == "composition":
-                response = await services["composition"].process(PageCompositionRequest(instruction=case["instruction"]))
+                # As NestJS sends it: a selection rides along as context.selectedText.
+                selection = {"selectedText": case["selected_text"]} if case.get("selected_text") else None
+                response = await services["composition"].process(
+                    PageCompositionRequest(instruction=case["instruction"], context=selection))
                 output = response.result.model_dump(mode="json")
                 failed = check_composition(output, case["expect"])
             else:

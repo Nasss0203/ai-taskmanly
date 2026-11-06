@@ -12,7 +12,7 @@ FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "training_raw_labels
 
 
 @pytest.mark.parametrize("case", FIXTURES, ids=lambda case: case["example"]["id"])
-def test_rejects_stored_labels_that_only_pass_after_repair(case):
+def test_rejects_stored_labels_that_only_pass_after_repair(case, model_path):
     provider = FakeLLMProvider(case["responses"])
     result = asyncio.run(answer(case["example"], provider))
     assert not result["kept"], result
@@ -20,7 +20,7 @@ def test_rejects_stored_labels_that_only_pass_after_repair(case):
     assert result["reason"].startswith("raw_"), result
 
 
-def test_clean_sourced_label_is_kept_without_rewriting():
+def test_clean_sourced_label_is_kept_without_rewriting(model_path):
     case = next(c for c in FIXTURES if c["example"]["id"] == "t0014")
     generation = json.dumps({"operations": case["clean_plan"]["operations"]}, ensure_ascii=False)
     result = asyncio.run(answer(case["example"], FakeLLMProvider([case["responses"][0], generation])))

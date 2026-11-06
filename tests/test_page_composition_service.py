@@ -390,7 +390,7 @@ def test_page_composition_repairs_semantically_invalid_draft() -> None:
     service = PageCompositionService(provider)
 
     request = PageCompositionRequest(
-        instruction="Tạo trang sprint planning.",
+        instruction="Tạo trang sprint planning có bảng task.",  # asks for the table it repairs
     )
 
     response = asyncio.run(

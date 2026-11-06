@@ -372,3 +372,31 @@ def test_ollama_idle_timeout_never_exceeds_the_total_timeout() -> None:
         await provider.close()
 
     asyncio.run(run_test())
+
+
+def test_ollama_success_log_has_token_and_timing_breakdown(caplog) -> None:
+    # Kế hoạch tạo trang + rút gọn ngữ cảnh (bước chung): prompt reading vs generation.
+    async def run_test() -> None:
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json={
+            "message": {"content": "private-output"}, "done_reason": "stop",
+            "prompt_eval_count": 1320, "eval_count": 75,
+            "prompt_eval_duration": 410_000_000, "eval_duration": 2_600_000_000, "load_duration": 15_000_000,
+        }))
+        async with httpx.AsyncClient(transport=transport, base_url="http://ollama.test") as client:
+            await OllamaProvider("http://unused.test", "test-model", 1, client).generate("system", "private-user")
+
+    with caplog.at_level("INFO"):
+        asyncio.run(run_test())
+    assert "prompt_tokens=1320 completion_tokens=75 prompt_ms=410 generate_ms=2600 load_ms=15 done_reason=stop" in caplog.text
+    assert "private" not in caplog.text
+
+
+def test_ollama_success_log_tolerates_missing_timing(caplog) -> None:
+    async def run_test() -> None:
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"message": {"content": "x"}}))
+        async with httpx.AsyncClient(transport=transport, base_url="http://ollama.test") as client:
+            await OllamaProvider("http://unused.test", "test-model", 1, client).generate("system", "user")
+
+    with caplog.at_level("INFO"):
+        asyncio.run(run_test())
+    assert "prompt_tokens=- completion_tokens=- prompt_ms=- generate_ms=- load_ms=- done_reason=-" in caplog.text

@@ -74,14 +74,17 @@ def with_context(kind, bad_context):
     return payload
 
 
-@pytest.mark.parametrize("kind,model", [
-    ("page-composition", PageCompositionRequest),
-    ("modification-planner", ModificationPlannerRequest),
+@pytest.mark.parametrize("kind,model,nodes", [
+    ("page-composition", PageCompositionRequest, 1001),
+    # Kế hoạch trang dài (E3): a Page context may hold 200 blocks.
+    ("modification-planner", ModificationPlannerRequest, 8001),
 ])
 @pytest.mark.parametrize("bad_context", [
-    {"text": "x" * 8001}, nested_context(13), {"items": [None] * 1001},
+    {"text": "x" * 8001}, nested_context(13), "nodes",
 ])
-def test_structured_context_is_bounded(kind, model, bad_context):
+def test_structured_context_is_bounded(kind, model, nodes, bad_context):
+    if bad_context == "nodes":
+        bad_context = {"items": [None] * nodes}
     payload = with_context(kind, bad_context)
     with pytest.raises(ValidationError):
         model.model_validate(payload)
@@ -130,11 +133,13 @@ def test_http_invalid_text_never_calls_llm(secured_client, kind, model, limit, t
     assert provider.calls == []
 
 
-@pytest.mark.parametrize("kind", ["page-composition", "modification-planner"])
+@pytest.mark.parametrize("kind,nodes", [("page-composition", 1001), ("modification-planner", 8001)])
 @pytest.mark.parametrize("bad_context", [
-    {"text": "x" * 8001}, nested_context(13), {"items": [None] * 1001},
+    {"text": "x" * 8001}, nested_context(13), "nodes",
 ])
-def test_http_invalid_context_never_calls_llm(secured_client, kind, bad_context):
+def test_http_invalid_context_never_calls_llm(secured_client, kind, nodes, bad_context):
+    if bad_context == "nodes":
+        bad_context = {"items": [None] * nodes}
     client, provider = secured_client
     payload = with_context(kind, bad_context)
     assert client.post("/internal/v1/" + kind, json=payload).status_code == 422
@@ -210,3 +215,27 @@ def test_stream_limits_without_content_length(chunks, status):
         {"type": "http", "path": "/internal/v1/page-composition"}, receive, send,
     ))
     assert sent[0]["status"] == status
+
+
+def planner_page(blocks: int, words: int = 12) -> dict:
+    context = make_context()
+    context["blocks"] = [{
+        "id": f"00000000-0000-0000-0000-{i:012d}", "parentBlockId": None, "type": "TODO", "orderIndex": i,
+        "title": None, "content": {"text": " ".join(["cập nhật báo cáo"] * (words // 3)), "checked": False},
+        "styleConfig": None, "dataConfig": None,
+    } for i in range(blocks)]
+    context["completeness"]["blocks"] = {"total": blocks, "included": blocks, "truncated": False}
+    return context
+
+
+def test_planner_accepts_a_long_page():
+    # E3: ~33 blocks were refused at 8000 bytes; the prompt now sends only what fits.
+    # Within the 64 KB body limit a Page of typical text fits ~160–190 blocks.
+    context = planner_page(150)
+    assert len(json.dumps(context, ensure_ascii=False).encode()) > 8000
+    ModificationPlannerRequest(instruction="thêm to-do A", context=context)
+
+
+def test_planner_still_refuses_an_oversized_page_with_a_budget_message():
+    with pytest.raises(ValidationError, match="exceeds the 56000-byte"):
+        ModificationPlannerRequest(instruction="thêm to-do A", context=planner_page(200, words=60))

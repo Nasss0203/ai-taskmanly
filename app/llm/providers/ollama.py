@@ -185,12 +185,32 @@ class OllamaProvider:
                 "Ollama response content is empty."
             )
 
+        def count(key: str) -> str:
+            value = final.get(key)
+            ok = isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            return str(value) if ok else "-"
+
+        def millis(key: str) -> str:
+            value = final.get(key)  # Ollama reports nanoseconds.
+            ok = isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            return str(round(value / 1_000_000)) if ok else "-"
+
+        done_reason = final.get("done_reason")
+        # Token counts and timings only: prompt reading vs generation (kế hoạch
+        # tạo trang + rút gọn ngữ cảnh). Never the prompt or the output.
         logger.info(
             "llm_request_succeeded "
-            "provider=%s model=%s latency_ms=%.2f",
+            "provider=%s model=%s latency_ms=%.2f "
+            "prompt_tokens=%s completion_tokens=%s prompt_ms=%s generate_ms=%s load_ms=%s done_reason=%s",
             self.provider_name,
             self.model_name,
             (perf_counter() - started_at) * 1000,
+            count("prompt_eval_count"),
+            count("eval_count"),
+            millis("prompt_eval_duration"),
+            millis("eval_duration"),
+            millis("load_duration"),
+            done_reason if isinstance(done_reason, str) and done_reason.isidentifier() else "-",
         )
 
         prompt_tokens = final.get("prompt_eval_count")

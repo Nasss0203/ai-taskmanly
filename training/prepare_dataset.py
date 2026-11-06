@@ -24,6 +24,7 @@ from typing import Any
 from app.modules.modification_planner.schemas.modification_planner_schema import ModificationPlannerRequest
 from app.modules.modification_planner.services.block_delete import plan_block_delete
 from app.modules.modification_planner.services.missing_target import plan_missing_target
+from app.modules.modification_planner.services.explicit_plan import plan_explicit_content
 from app.modules.modification_planner.services.block_text import plan_block_text
 from app.modules.modification_planner.services.reference_checklist import plan_reference_checklist
 from app.modules.modification_planner.services.todo_status import plan_todo_status
@@ -379,7 +380,8 @@ def reserved_sentences() -> set[str]:
 def answered_by_rules(request: ModificationPlannerRequest) -> bool:
     return any(plan(request.instruction, request.context) is not None
                for plan in (plan_todo_status, plan_block_text, plan_block_delete, plan_missing_target)) or (
-        plan_reference_checklist(request.instruction, request.context.page.id, request.references) is not None)
+        plan_reference_checklist(request.instruction, request.context.page.id, request.references) is not None) or (
+        plan_explicit_content(request.instruction, request.context, request.references) is not None)
 
 
 def keep(example: dict[str, Any], reserved: set[str]) -> bool:

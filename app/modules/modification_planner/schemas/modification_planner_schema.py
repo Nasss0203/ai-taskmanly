@@ -38,8 +38,9 @@ from pydantic import (
 
 from app.shared.request_limits import (
     MAX_INSTRUCTION_LENGTH,
-    validate_context,
-    validate_input_budget,
+    MAX_PAGE_INPUT_BYTES,
+    validate_page_context,
+    validate_page_input_budget,
 )
 
 
@@ -471,7 +472,7 @@ class AiPageContext(
 MAX_REFERENCES = 8
 MAX_REFERENCE_TEXT_LENGTH = 400
 MAX_REFERENCES_BYTES = 3000
-MAX_INPUT_BYTES_WITH_REFERENCES = 13000
+MAX_INPUT_BYTES_WITH_REFERENCES = MAX_PAGE_INPUT_BYTES + MAX_REFERENCES_BYTES
 
 
 class ModificationPlannerReference(
@@ -501,7 +502,7 @@ class ModificationPlannerRequest(
 
     instruction: Annotated[NonBlankString, Field(max_length=MAX_INSTRUCTION_LENGTH)]
 
-    context: Annotated[AiPageContext, BeforeValidator(validate_context)]
+    context: Annotated[AiPageContext, BeforeValidator(validate_page_context)]
 
     references: Annotated[
         list[ModificationPlannerReference] | None,
@@ -511,7 +512,7 @@ class ModificationPlannerRequest(
     @model_validator(mode="after")
     def validate_budget(self) -> ModificationPlannerRequest:
         if not self.references:
-            validate_input_budget(self.model_dump(mode="json"))
+            validate_page_input_budget(self.model_dump(mode="json"))
             return self
         labels = [reference.label for reference in self.references]
         if len(set(labels)) != len(labels):
@@ -523,7 +524,9 @@ class ModificationPlannerRequest(
             self.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"),
         ).encode("utf-8")
         if len(encoded) > MAX_INPUT_BYTES_WITH_REFERENCES:
-            raise ValueError("Combined AI input exceeds the 13000-byte UTF-8 budget.")
+            raise ValueError(
+                f"Combined AI input exceeds the {MAX_INPUT_BYTES_WITH_REFERENCES}-byte UTF-8 budget.",
+            )
         return self
 
 

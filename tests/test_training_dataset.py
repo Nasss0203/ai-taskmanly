@@ -68,10 +68,16 @@ def _route(operation="INSERT_BLOCKS"):
 
 
 def _checklist_example():
+    # A checklist without a place is drafted by rule now (kế hoạch bỏ qua model,
+    # F1): the model still places one under a named section.
     for example in generate(80, seed=11):
-        if example["kind"] == "checklist" and "after_block" not in example["expect"]:
+        if example["kind"] == "checklist" and example["expect"].get("after_block"):
             return example
-    raise AssertionError("no plain checklist example")
+    raise AssertionError("no placed checklist example")
+
+
+def _after(example):
+    return example["expect"]["after_block"][0]
 
 
 def _insert(items, after=None):
@@ -84,7 +90,7 @@ def _insert(items, after=None):
 
 def test_teacher_keeps_a_right_plan_as_two_chats():
     example = _checklist_example()
-    provider = FakeLLMProvider([_route(), _insert(example["expect"]["todo_texts"])])
+    provider = FakeLLMProvider([_route(), _insert(example["expect"]["todo_texts"], _after(example))])
     result = asyncio.run(answer(example, provider))
     assert result["kept"], result
     assert [len(chat["messages"]) for chat in result["chats"]] == [3, 3]
@@ -98,7 +104,7 @@ def test_teacher_keeps_a_right_plan_as_two_chats():
 def test_teacher_drops_a_valid_but_wrong_plan():
     example = _checklist_example()
     wrong = example["expect"]["todo_texts"][:-1] + ["Một việc tự nghĩ ra"]
-    result = asyncio.run(answer(example, FakeLLMProvider([_route(), _insert(wrong)])))
+    result = asyncio.run(answer(example, FakeLLMProvider([_route(), _insert(wrong, _after(example))])))
     assert not result["kept"] and "todo_texts" in result["reason"]
 
 
@@ -123,8 +129,9 @@ def test_run_carries_on_after_an_interruption(tmp_path):
                         encoding="utf-8")
     output = tmp_path / "sft.jsonl"
     items = example["expect"]["todo_texts"]
-    first = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items)]), limit=1))
-    second = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items)]), limit=None))
+    after = _after(example)
+    first = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items, after)]), limit=1))
+    second = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items, after)]), limit=None))
     assert (first["kept"], second["kept"], second["alreadyDone"]) == (1, 1, 1)
     assert len(output.read_text(encoding="utf-8").splitlines()) == 4
 

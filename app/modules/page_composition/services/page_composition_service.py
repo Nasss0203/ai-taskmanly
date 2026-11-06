@@ -20,6 +20,11 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionUsage,
 )
 from app.modules.page_composition.services.task_blocks import normalize_task_blocks
+from app.modules.page_composition.services.content_lock import (
+    compose_explicit_page,
+    drop_unrequested_databases,
+    lock_composition_content,
+)
 from app.modules.page_composition.validators import (
     PageCompositionSemanticValidationError,
     validate_page_composition_semantics,
@@ -32,6 +37,7 @@ logger = logging.getLogger(__name__)
 # A compact page (about 12 blocks, or a 20-row table) fits well within this;
 # every token costs time on a model that runs partly on the CPU.
 MAX_NEW_TOKENS = 2000
+EXPLICIT_PAGE_MODEL = "explicit-page-v1"
 
 
 class PageCompositionService:
@@ -45,6 +51,13 @@ class PageCompositionService:
         self,
         request: PageCompositionRequest,
     ) -> PageCompositionResponse:
+        # Kế hoạch bỏ qua model (F3): a page the sentence fully lists.
+        explicit = compose_explicit_page(request.instruction)
+        if explicit is not None:
+            validate_page_composition_semantics(explicit)
+            logger.info("page_composition_rules model=%s", EXPLICIT_PAGE_MODEL)
+            return PageCompositionResponse(result=explicit, provider="rules", model=EXPLICIT_PAGE_MODEL)
+
         system_prompt, user_prompt = build_page_composition_prompt(
             instruction=request.instruction,
             context=request.context,
@@ -139,7 +152,10 @@ class PageCompositionService:
         )
 
         return PageCompositionResponse(
-            result=normalize_task_blocks(draft, request.instruction),
+            result=drop_unrequested_databases(
+                lock_composition_content(normalize_task_blocks(draft, request.instruction), request.instruction),
+                request.instruction,
+            ),
             provider=self.llm_provider.provider_name,
             model=self.llm_provider.model_name,
             usage=(

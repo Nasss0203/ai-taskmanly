@@ -41,6 +41,8 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
 from app.shared.json_parser import parse_json_object
 from app.modules.modification_planner.services.block_delete import plan_block_delete
 from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
+from app.modules.modification_planner.services.context_window import window_context
+from app.modules.modification_planner.services.explicit_plan import EXPLICIT_CONTENT_MODEL, plan_explicit_content
 from app.modules.modification_planner.services.explicit_content import mentions_position, parse_explicit_blocks
 from app.modules.modification_planner.services.sentence_text import QUOTES, command_text
 from app.modules.modification_planner.services.block_text import plan_block_text
@@ -91,6 +93,10 @@ ROUTER_MAX_NEW_TOKENS = 256
 BLOCK_TEXT_MODEL = "block-text-v1"
 BLOCK_DELETE_MODEL = "block-delete-v1"
 GENERATION_MAX_NEW_TOKENS = 1200
+# Kế hoạch trang dài (E2): prompt budget for the Page context.
+DEFAULT_NUM_CTX = 6144
+PROMPT_FIXED_TOKENS = 2150  # ~1.850 measured + margin
+MIN_CONTEXT_BUDGET_TOKENS = 1200
 
 HEADING_INTENT_TERMS = ("heading", "header", "tiêu đề", "đề mục")
 
@@ -162,8 +168,19 @@ class ModificationPlannerService:
                 provider=REFERENCE_CHECKLIST_PROVIDER,
                 model=REFERENCE_CHECKLIST_MODEL,
             )
+        # Kế hoạch bỏ qua model (F1): content and place are fully spelled out.
+        explicit = plan_explicit_content(request.instruction, request.context, request.references)
+        if explicit is not None:
+            validate_modification_plan_semantics(explicit, request.context)
+            logger.info("modification_planner_rules model=%s status=%s", EXPLICIT_CONTENT_MODEL, explicit.status)
+            return ModificationPlannerResponse(
+                result=explicit,
+                provider=TODO_STATUS_PROVIDER,
+                model=EXPLICIT_CONTENT_MODEL,
+            )
         context_payload = self._serialize_context(
             request.context,
+            request.instruction,
         )
         started_at = perf_counter()
         logger.info(
@@ -832,11 +849,18 @@ class ModificationPlannerService:
     def _serialize_context(
         self,
         context: AiPageContext,
+        instruction: str = "",
     ) -> dict[str, Any]:
-        return context.model_dump(
-            mode="json",
-            exclude_unset=True,
-        )
+        # Kế hoạch trang dài (E3/E4): the compact context (D.2), or only the part
+        # the sentence needs when the Page is over the prompt budget.
+        return window_context(context, instruction, self._context_budget_tokens())
+
+    def _context_budget_tokens(self) -> int:
+        # E2 (2026-11-06): the fixed part of a generation prompt (system prompt,
+        # sentence, schema) is ~1.850 tokens; the output keeps 1.200.
+        num_ctx = getattr(self.llm_provider, "_num_ctx", None) or DEFAULT_NUM_CTX
+        return max(MIN_CONTEXT_BUDGET_TOKENS, num_ctx - GENERATION_MAX_NEW_TOKENS - PROMPT_FIXED_TOKENS)
+
     def _combine_usage(
         self,
         first: LLMTokenUsage | None,
