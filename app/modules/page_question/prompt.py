@@ -1,5 +1,3 @@
-"""Hỏi đáp về trang (AI-Q1): the Page as plain lines for the 4B model."""
-
 import re
 from typing import Any
 
@@ -20,8 +18,6 @@ FREE_TASK = ('Việc cần làm: trả lời câu hỏi. Nếu nội dung trang 
              'trả về đúng một câu: {missing}')
 
 
-# A line of the Page that talks to the AI is still data (pq23: the 4B model
-# answered "HACKED" when told so inside the Page).
 INSTRUCTION_LIKE = re.compile(
     r"\b(?:bo qua|ignore|disregard|chi tra loi|tra loi dung|reply only|respond only|answer only|"
     r"system prompt|quy tac o tren|previous instructions|lam theo lenh|ban la ai moi|you are now)\b"
@@ -55,7 +51,6 @@ def _value(value: Any, options: dict[str, str]) -> str:
 
 
 def render_page(window: dict[str, Any]) -> str:
-    """Blocks as indented lines, tables as one line per row."""
     lines: list[str] = []
     blocks = window.get("blocks") or []
     depth: dict[str, int] = {}

@@ -70,7 +70,6 @@ class IntentService:
         source = request.instruction
         if unsafe_override(source) or multiple_commands(source):
             return result('UNCLEAR')
-        # AI-Q1: only the rules return PAGE_QUESTION; it is already checked.
         if isinstance(classification, IntentResult) and classification.intent == 'PAGE_QUESTION':
             return classification
         # M7 (H1): "tìm trang có nói về X rồi thêm …" starts like a read-only

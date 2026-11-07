@@ -245,7 +245,6 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     # without an edit, "tìm …" stays a read-only request below.
     if content_page_reference(source) is not None:
         return result('MODIFY_PAGE')
-    # AI-Q1: a question about one Page or table is answered, read only.
     if not request.selectedText and not inline_source(source):
         question = page_question(source, has_current_page=bool(request.currentPageId))
         if question is not None and question.kind == 'MIXED':

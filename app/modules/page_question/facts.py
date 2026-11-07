@@ -1,5 +1,3 @@
-"""Hỏi đáp về trang (AI-Q1): counts come from rules, never from the model."""
-
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -97,7 +95,9 @@ def find_database(
             return exact[0]
         if len(databases) == 1 and text_key(context.page.title) == wanted:
             return databases[0]
-        return None
+        longer =[database for database in databases
+                  if text_key(database.name) and wanted.startswith(text_key(database.name) + " ")]
+        return longer[0] if len(longer) == 1 else None
     key = text_key(question)
     named = [database for database in databases if _named_in(database.name, key)]
     if named:
@@ -159,7 +159,6 @@ def database_answer(
 
 
 def known_numbers(context: AiPageContext) -> set[str]:
-    """Every number the Page itself holds, plus the rule counts."""
     found: set[str] = set()
     dump = context.model_dump(mode="json")
     for block in dump.get("blocks") or []:

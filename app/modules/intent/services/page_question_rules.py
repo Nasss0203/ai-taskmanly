@@ -1,9 +1,3 @@
-"""Hỏi đáp về trang (AI-Q1): a question about one Page or table, read only.
-
-Decided by rules before the model. The names are hints taken from the user's
-own words; NestJS resolves the real Page and checks permission.
-"""
-
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -25,9 +19,18 @@ FOLLOW_UP_EDIT = re.compile(
 MARKER = re.compile(r"(?<!\w)(?P<kind>trang|page|bang|table|database|co so du lieu)(?!\w)")
 CURRENT = re.compile(r"^(?:nay|hien tai|dang mo|this|current)\b")
 NOT_A_NAME = re.compile(r"^(?:nao|la gi|la cai gi|gi|which|nay\s+la)\b")
+HOW_TO = re.compile(
+    r"^(?:(?:hay|vui long|giup toi|giup minh|ban oi|cho (?:toi|minh) hoi|please|can you|could you)\s+)*"
+    r"(?:cach\s+\w+|lam sao|lam the nao|huong dan|how (?:do|can|should) (?:i|we|you)|how to)\b"
+)
+HISTORY = re.compile(
+    r"\b(?:them gi|da them|vua them|thay doi gi|sua gi|da sua|vua sua|ai sua|what changed|what was added)\b"
+)
 NAME_END = re.compile(
-    r"\s*(?:[?,.!;:]|\s(?:con|co|da|chua|giup|nhe|nha|di|voi|noi|gom|thi|la|bao|ai|khi|duoc|hien|dang|ve|"
-    r"may|tom tat|has|have|is|are|does|do|so|with|about|contain|contains)\b|$)"
+    r"\s*(?:[?,.!;:]|\s(?:con|co|da|chua|giup|noi|gom|thi|la|bao|ai|khi|duoc|hien|dang|ve|"
+    r"may|tom tat|has|have|is|are|does|do|so|with|about|contain|contains)\b|"
+    r"\s(?:nhe|nha|di|voi)\s*(?=[?,.!;:]|$)|"
+    r"\s(?:o|trong|tai|cua|thuoc)\s+(?=(?:trang|page|bang|table)\b)|\s(?:in|on|of)\s+the\s|$)"
 )
 ENGLISH_NAME = re.compile(r"(?:\b(?:in|on|of)\s+(?:the\s+)?|\bthe\s+)(?P<name>.+?)\s+(?:page|table|database)\b")
 TODO_WORDS = re.compile(
@@ -69,7 +72,6 @@ def _name_after(text: Folded, start: int) -> str | None:
 
 
 def _references(text: Folded) -> tuple[str | None, str | None, bool]:
-    """(page name, table name, names the current Page) from the folded sentence."""
     page = database = None
     current = False
     for marker in MARKER.finditer(text.value):
@@ -99,10 +101,9 @@ def _references(text: Folded) -> tuple[str | None, str | None, bool]:
 
 
 def page_question(source: str, *, has_current_page: bool) -> PageQuestion | None:
-    """The question's kind and names, ``MIXED`` when it also asks for an edit, or None."""
     text = Folded(unicodedata.normalize("NFC", source).strip())
     folded = " ".join(text.value.split())
-    if not folded or FIND_ONLY.search(folded):
+    if not folded or FIND_ONLY.search(folded) or HOW_TO.match(folded) or HISTORY.search(folded):
         return None
     if EDIT_START.match(folded) or EDIT_START.match(fold(command_text(source)).strip()):
         return None

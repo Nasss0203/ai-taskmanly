@@ -158,7 +158,6 @@ async def lifespan(application: FastAPI):
             writing_provider,
             continue_provider,
         )
-        # AI-Q1: a summary or free question about a Page uses the writing model.
         application.state.page_question_service = PageQuestionService(writing_provider)
 
         application.state.page_composition_service = (

@@ -1,10 +1,3 @@
-"""Hỏi đáp về trang (AI-Q1): answer one question about one Page, read only.
-
-To-do and table counts are answered by rules with a fixed sentence. A summary
-or a free question goes to the writing model; its answer is checked by rules
-(numbers and names must come from the Page) and generated once more if not.
-"""
-
 import logging
 import re
 from time import perf_counter
@@ -70,7 +63,6 @@ def answer_problem(
 
 
 def followed_page(answer: str, page_text: str) -> bool:
-    """Words found only in a Page line that talks to the AI: two, or all of a short answer."""
     lines = [line for line in page_text.splitlines() if line.strip()]
     commands = [line for line in lines if is_instruction_like(line)]
     if not commands:

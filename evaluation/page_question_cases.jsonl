@@ -34,3 +34,6 @@
 {"id": "pq34", "instruction": "page là gì", "expect": {"intent": "OTHER"}}
 {"id": "pq35", "instruction": "trang nào có nhắc tới OAuth", "expect": {"intent_not": "PAGE_QUESTION"}}
 {"id": "pq36", "instruction": "Tóm tắt", "selectedText": "Hôm nay nhóm đã hoàn thành kiểm thử đăng nhập và sửa ba lỗi giao diện. Ngày mai họp khách hàng lúc chín giờ.", "currentPageId": "page-meeting", "expect": {"intent": "WRITING"}}
+{"id": "pq37", "instruction": "bảng Tasks ở trang Hội họp tuần có bao nhiêu việc Done?", "expect": {"kind": "DATABASE_COUNT", "page": "Hội họp tuần", "table": "Tasks", "context": "meeting", "contains": ["4 dòng Status = Done"]}}
+{"id": "pq38", "instruction": "bảng Tasks trong trang Hội họp tuần có bao nhiêu dòng?", "expect": {"kind": "DATABASE_COUNT", "page": "Hội họp tuần", "table": "Tasks", "context": "meeting", "contains": ["có 7 dòng"]}}
+{"id": "pq39", "instruction": "tóm tắt trang sub man nha", "expect": {"kind": "SUMMARY", "page": "sub man", "context": "subman", "model": true}}

@@ -131,6 +131,70 @@ def test_general_questions_are_not_page_questions(sentence):
     assert set((result.model_dump() if result else {})) <= {"intent", "writingAction", "language", "needsClarification"}
 
 
+@pytest.mark.parametrize("sentence", [
+    "Cách dùng database trong Taskmanly?",
+    "Làm sao chia sẻ trang cho người khác?",
+    "làm thế nào để xoá trang?",
+    "hướng dẫn tạo bảng trong trang",
+    "cách thêm to-do vào trang?",
+    "how do I share a page?",
+    "how to create a table on a page",
+    "Xem trong trang sub man thêm gì",
+])
+def test_how_to_questions_are_not_page_questions(sentence):
+    result = intent(sentence)
+    assert result is None or result.intent != "PAGE_QUESTION"
+
+
+@pytest.mark.parametrize(("sentence", "kind", "page", "table"), [
+    ("trang Hội họp tuần còn việc nào chưa xong?", "TODO_STATUS", "Hội họp tuần", None),
+    ("tóm tắt trang sub man", "SUMMARY", "sub man", None),
+    ("bảng Tasks có bao nhiêu việc Done?", "DATABASE_COUNT", None, "Tasks"),
+])
+def test_named_page_questions_still_found(sentence, kind, page, table):
+    result = intent(sentence)
+    assert (result.intent, result.questionKind, result.pageReference, result.databaseReference) == (
+        "PAGE_QUESTION", kind, page, table)
+
+
+@pytest.mark.parametrize(("sentence", "kind", "page"), [
+    ("tóm tắt trang Về chúng tôi", "SUMMARY", "Về chúng tôi"),
+    ("trang Cho thuê nhà còn việc gì chưa xong", "TODO_STATUS", "Cho thuê nhà"),
+    ("trang Hội họp tuần còn việc nào chưa xong nha", "TODO_STATUS", "Hội họp tuần"),
+    ("trang Hội họp tuần nha, còn việc nào chưa xong?", "TODO_STATUS", "Hội họp tuần"),
+])
+def test_titles_starting_like_prepositions_or_fillers(sentence, kind, page):
+    result = intent(sentence)
+    assert (result.intent, result.questionKind, result.pageReference) == ("PAGE_QUESTION", kind, page)
+
+
+@pytest.mark.parametrize(("sentence", "page", "table"), [
+    ("bảng Tasks ở trang Hội họp tuần có bao nhiêu việc Done?", "Hội họp tuần", "Tasks"),
+    ("bảng Tasks trong trang Hội họp tuần có bao nhiêu dòng?", "Hội họp tuần", "Tasks"),
+    ("bảng Tasks của trang Hội họp tuần có bao nhiêu việc Done?", "Hội họp tuần", "Tasks"),
+])
+def test_table_name_stops_before_its_page(sentence, page, table):
+    result = intent(sentence)
+    assert (result.questionKind, result.pageReference, result.databaseReference) == ("DATABASE_COUNT", page, table)
+
+
+def test_filler_at_the_end_is_still_cut():
+    assert intent("tóm tắt trang sub man nha").pageReference == "sub man"
+
+
+def test_table_read_longer_than_its_real_name_is_counted():
+    rows = [row("r1", "A", "o-done"), row("r2", "B", "o-todo")]
+    response = ask("DATABASE_COUNT", "bảng Tasks ở trang X có bao nhiêu việc Done?", make_context(rows=rows),
+                   database="Tasks ở trang X")
+    assert response.answer == 'Bảng "Tasks" có 1 dòng Status = Done (trên tổng 2 dòng).'
+
+
+def test_name_read_after_a_table_word_is_left_to_nestjs():
+    result = intent("database trong Taskmanly có gì?")
+    assert (result.intent, result.questionKind, result.databaseReference) == (
+        "PAGE_QUESTION", "FREE", "trong Taskmanly")
+
+
 def test_question_with_edit_is_unclear():
     assert intent("còn việc nào chưa xong thì tích hết ở trang Họp tuần").intent == "UNCLEAR"
 

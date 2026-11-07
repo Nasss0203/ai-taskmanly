@@ -6,7 +6,6 @@ from app.shared.request_limits import CurrentPageId, Instruction, WritingText, v
 
 
 ModelIntentType = Literal['CREATE_PAGE', 'MODIFY_PAGE', 'WRITING', 'OTHER', 'UNCLEAR']
-# AI-Q1: PAGE_QUESTION is decided by rules only, never by the model.
 IntentType = Literal['CREATE_PAGE', 'MODIFY_PAGE', 'WRITING', 'OTHER', 'UNCLEAR', 'PAGE_QUESTION']
 QuestionKind = Literal['TODO_STATUS', 'DATABASE_COUNT', 'SUMMARY', 'FREE']
 PageName = Annotated[str, Field(min_length=1, max_length=255)]
