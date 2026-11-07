@@ -170,7 +170,10 @@ def test_internal_writing_uses_composed_service(client: TestClient) -> None:
 def test_internal_writing_actions_return_result(
     client: TestClient,
     payload: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Placeholder result; the writing checks (V4) are tested in test_writing_service.
+    monkeypatch.setattr("app.modules.writing.services.writing_service.writing_problem", lambda *args: None)
     client.app.state.writing_service = WritingService(
         FakeLLMProvider(["Processed text"])
     )

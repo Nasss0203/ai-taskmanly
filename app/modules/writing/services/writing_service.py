@@ -1,14 +1,18 @@
 import logging
+import re
 from time import perf_counter
 
-from app.core.exceptions import InvalidLLMResponseError
+from app.core.exceptions import InvalidLLMResponseError, WritingNotDoneError
 from app.llm.base import LLMProvider
 from app.modules.writing.prompts import build_writing_prompt
 from app.modules.writing.schemas import WritingAction, WritingRequest, WritingResponse
 from app.modules.writing.schemas.writing_schema import WritingUsage
+from app.modules.writing.services.writing_check import PROBLEMS, writing_problem
 
 
 logger = logging.getLogger(__name__)
+
+DAY_HINT = re.compile(r"\s*[(（](?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[)）]")
 
 
 class WritingService:
@@ -19,6 +23,33 @@ class WritingService:
     ) -> None:
         self.llm_provider = llm_provider
         self.continue_llm_provider = continue_llm_provider
+
+    async def _generate_checked(
+        self, provider: LLMProvider, request: WritingRequest, system_prompt: str, user_prompt: str,
+    ):
+        """Kế hoạch sửa tính năng viết (V4, DV3): a result failing the rule checks is
+        generated once more with the reason; a second failure is reported."""
+        note = ""
+        for attempt in range(2):
+            generation = await provider.generate(
+                system_prompt=system_prompt + note, user_prompt=user_prompt, max_new_tokens=1000,
+            )
+            result = generation.text
+            if request.action is WritingAction.TRANSLATE:
+                # The prompt names days in English in the source ("thứ Năm (Thursday)");
+                # the hint is no part of the translation.
+                result = DAY_HINT.sub("", result)
+            if request.action is WritingAction.CONTINUE and result.startswith(request.text):
+                result = result[len(request.text):]
+            if not result.strip():
+                raise InvalidLLMResponseError("Writing result is empty.")
+            problem = writing_problem(request.action, request.text, result.strip(), request.language)
+            if problem is None:
+                return generation, result
+            logger.warning("writing_check_failed operation=%s problem=%s attempt=%d",
+                           request.action.value, problem, attempt + 1)
+            note = f"\n\nLẦN TRƯỚC KẾT QUẢ CHƯA ĐẠT: {PROBLEMS[problem]}. Hãy làm lại đúng yêu cầu ở trên."
+        raise WritingNotDoneError(problem)
 
     async def process(self, request: WritingRequest) -> WritingResponse:
         provider = (
@@ -40,11 +71,7 @@ class WritingService:
             provider.model_name,
         )
         try:
-            generation = await provider.generate(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                max_new_tokens=1000,
-            )
+            generation, result = await self._generate_checked(provider, request, system_prompt, user_prompt)
         except Exception as exc:
             logger.warning(
                 "writing_failed operation=%s provider=%s model=%s "
@@ -57,12 +84,6 @@ class WritingService:
             )
             raise
 
-        result = generation.text
-        if request.action is WritingAction.CONTINUE and result.startswith(request.text):
-            result = result[len(request.text):]
-
-        if not result.strip():
-            raise InvalidLLMResponseError("Writing result is empty.")
 
         logger.info(
             "writing_succeeded operation=%s provider=%s model=%s latency_ms=%.2f",

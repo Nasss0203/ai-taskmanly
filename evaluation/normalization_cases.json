@@ -104,6 +104,10 @@
     {
       "input": "ghi chú dời họp sang thứ Năm",
       "output": "thêm ghi chú \"dời họp sang thứ Năm\""
+    },
+    {
+      "input": "Nhờ bạn thêm vào bảng Tasks dòng Kiểm thử hồi quy ở trang Thử bảng AI 2",
+      "output": "thêm dòng Kiểm thử hồi quy vào bảng Tasks ở trang Thử bảng AI 2"
     }
   ]
 }

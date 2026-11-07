@@ -167,7 +167,8 @@ def source_backed_edit_instruction(
 def is_read_only_page_request(source: str) -> bool:
     return bool(re.match(
         r"^(?:(?:please|can you|could you|hãy|vui lòng)\s+)?"
-        r"(?:read|show|view|open|find|search|what|how|đọc|xem|mở|tìm|"
+        # "mở rộng" (expand) is a writing action, not "mở" (open).
+        r"(?:read|show|view|open|find|search|what|how|đọc|xem|mở(?!\s+rộng)|tìm|"
         r"cho (?:tôi|mình|em) xem)\b",
         normalize(source).strip(),
     ))

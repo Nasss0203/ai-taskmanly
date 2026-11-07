@@ -20,6 +20,7 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionUsage,
 )
 from app.modules.modification_planner.services.sentence_normalize import normalize_create_instruction
+from app.modules.page_composition.services.database_blocks import complete_databases
 from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.services.content_lock import (
     compose_explicit_page,
@@ -157,8 +158,11 @@ class PageCompositionService:
         )
 
         return PageCompositionResponse(
-            result=drop_unrequested_databases(
-                lock_composition_content(normalize_task_blocks(draft, request.instruction), request.instruction),
+            result=complete_databases(
+                drop_unrequested_databases(
+                    lock_composition_content(normalize_task_blocks(draft, request.instruction), request.instruction),
+                    request.instruction,
+                ),
                 request.instruction,
             ),
             provider=self.llm_provider.provider_name,

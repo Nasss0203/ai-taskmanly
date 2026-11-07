@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ollama_modification_planner_model: str | None = None
     # Intent and page-intent (short structured reads); unset keeps OLLAMA_MODEL.
     ollama_intent_model: str | None = None
+    # Kế hoạch sửa tính năng viết (V3): dịch / tóm tắt / viết lại / rút gọn / mở rộng.
+    # Unset keeps the old behaviour (OLLAMA_MODEL).
+    ollama_writing_model: str | None = None
 
     ollama_num_ctx: int = 16384
 

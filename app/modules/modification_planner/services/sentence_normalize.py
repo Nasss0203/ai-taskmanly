@@ -17,7 +17,11 @@ QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 EDIT_VERB = r"(?:chinh sua|thay doi|doi|sua|thay|cap nhat|change|update|edit|rename)"
 DELETE_VERB = r"(?:xoa(?: bo)?|go(?: bo)?|delete|remove)"
 TICK_VERB = r"(?:bo tich|bo danh dau|danh dau(?: (?:da )?(?:xong|hoan thanh))?|tich(?: (?:da )?xong)?|hoan thanh|check|uncheck|mark)"
-VERB = rf"(?:them|chen|bo sung|ghi them|add|insert|{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB})"
+# Kế hoạch sửa tính năng viết (V1): writing verbs, so "bạn có thể dịch giúp tôi
+# đoạn này … được không" reads as "dịch đoạn này …" for intent.
+WRITE_VERB = (r"(?:dich|tom tat|viet lai|viet tiep|rut gon|mo rong|viet dai ra|viet hay hon|translate|"
+              r"summarize|rewrite|shorten|expand|continue|paraphrase|improve)")
+VERB = rf"(?:them|chen|bo sung|ghi them|add|insert|{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{WRITE_VERB})"
 KIND = r"(?:to-do|todo|to-dos|todos|heading|tieu de|checklist|doan van|doan|dong|trich dan|ghi chu|viec|task|tasks|muc)"
 
 # S2: requests wrapped in polite words.
@@ -44,7 +48,7 @@ INSERTS = re.compile(
 CREATE_PAGE = re.compile(r"^(?:tao|lam)(?: (?:giup|gium|cho))?(?: (?:minh|toi|em))?(?: (?:mot|cai))* (?=(?:trang|page)\b)")
 CREATE_START = re.compile(r"^(?:tao|create|make)(?: (?:mot|a|an|new))? (?:trang|page)\b")
 # "xoá giúp mình …", "sửa giúp tôi …": the help words after the verb.
-HELP_AFTER_VERB = re.compile(rf"^({VERB}) (?:giup|gium)(?: (?:minh|toi))? ")
+HELP_AFTER_VERB = re.compile(rf"^({VERB}) (?:giup|gium)(?: (?:minh|toi))?(?= |:|,)")
 # "xoá cái A đi": "cái" names nothing.
 THING_AFTER_VERB = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) cai ")
 TO_DO = re.compile(r"\bto do\b")
@@ -68,6 +72,7 @@ NOTE = re.compile(r"^ghi chu(?: lai)?(?: (?:giup|gium)(?: (?:minh|toi))?)?(?:\s*
 TABLE_FIRST = re.compile(
     r"^them vao bang (?P<table>\S+(?: \S+)??) (?P<rest>(?:\d+ )?(?:dong|hang|tasks?|rows?|sach|cuon)\b.+)$"
 )
+PAGE_TAIL = re.compile(r"\s+(?:o|trong|tai|vao|cua|tren|on|in)\s+(?:the\s+)?(?:trang|page)\s+.+$")
 ADD_INTO = re.compile(r"^them vao (?P<place>phan [^:]+?)\s*:\s*(?P<text>.+)$")
 
 
@@ -122,7 +127,7 @@ def normalize_instruction(instruction: str) -> str:
     text = _sub(text, GIVE_ME, lambda m, f: "thêm ")
     # Only "làm …" or help words change; a plain "Tạo trang" keeps its own words.
     text = _sub(text, CREATE_PAGE, lambda m, f: "tạo " if m.group(0) != "tao " else f.original(*m.span()))
-    text = _sub(text, HELP_AFTER_VERB, lambda m, f: _group(m, f, 1) + " ")
+    text = _sub(text, HELP_AFTER_VERB, lambda m, f: _group(m, f, 1))
     text = _sub(text, THING_AFTER_VERB, lambda m, f: _group(m, f, 1) + " ")
     while TO_DO.search(Folded(text).value):
         text = _sub(text, TO_DO, lambda m, f: "to-do")
@@ -152,11 +157,20 @@ def normalize_instruction(instruction: str) -> str:
 
 
 def _table_first(table: str, rest: str) -> str:
-    """ "2 dòng: A, B" stays a listed form; "dòng X …" moves before the table."""
+    """ "2 dòng: A, B" stays a listed form; "dòng X …" moves before the table.
+
+    A Page named at the end ("… ở trang Thử bảng AI 2") stays at the end, where
+    Page intent reads it (live: it became "Thử bảng AI 2 vào bảng Tasks")."""
+    folded = Folded(rest)
+    target = PAGE_TAIL.search(folded.value)
+    page = ""
+    if target:
+        page = " " + folded.original(target.start(), len(folded.value)).strip()
+        rest = folded.original(0, target.start()).strip()
     if ":" in rest:
         kind, items = rest.split(":", 1)
-        return f"thêm {kind.strip()} vào bảng {table}: {items.strip()}"
-    return f"thêm {rest} vào bảng {table}"
+        return f"thêm {kind.strip()} vào bảng {table}: {items.strip()}{page}"
+    return f"thêm {rest} vào bảng {table}{page}"
 
 
 def _add_into(place: str, text: str) -> str:

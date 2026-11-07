@@ -1,0 +1,53 @@
+{
+  "_note": "Kế hoạch sửa tính năng viết (V2): đoạn chữ khi không có \":\" / ngoặc kép / bôi đen. Chung: ai-taskmanly/evaluation/writing_source_cases.json và be .../ai-writing-inline-text.cases.json.",
+  "cases": [
+    {
+      "input": "dịch sang tiếng anh chúc mọi người cuối tuần vui vẻ",
+      "text": "chúc mọi người cuối tuần vui vẻ"
+    },
+    {
+      "input": "dịch câu này sang tiếng Anh cảm ơn anh đã giúp đỡ",
+      "text": "cảm ơn anh đã giúp đỡ"
+    },
+    {
+      "input": "dịch cảm ơn anh rất nhiều sang tiếng Anh",
+      "text": "cảm ơn anh rất nhiều"
+    },
+    {
+      "input": "dich sang tieng anh xin chao moi nguoi",
+      "text": "xin chao moi nguoi"
+    },
+    {
+      "input": "dịch sang tiếng anh chúc mọi người cuối tuần vui vẻ nhé",
+      "text": "chúc mọi người cuối tuần vui vẻ"
+    },
+    {
+      "input": "Bạn có thể dịch giúp tôi đoạn này sang tiếng Nhật được không",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn này sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "viết lại cho hay hơn",
+      "text": null
+    },
+    {
+      "input": "mở rộng thêm ý",
+      "text": null
+    },
+    {
+      "input": "translate to English",
+      "text": null
+    },
+    {
+      "input": "English please",
+      "text": null
+    },
+    {
+      "input": "tóm tắt giúp mình hôm nay nhóm đã hoàn thành kiểm thử đăng nhập và sửa ba lỗi giao diện",
+      "text": "hôm nay nhóm đã hoàn thành kiểm thử đăng nhập và sửa ba lỗi giao diện"
+    }
+  ]
+}

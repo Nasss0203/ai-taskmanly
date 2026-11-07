@@ -19,6 +19,14 @@ class LLMUnavailableError(LLMProviderError):
     pass
 
 
+class WritingNotDoneError(Exception):
+    """Kế hoạch sửa tính năng viết (V4): the result failed the checks twice."""
+
+    def __init__(self, problem: str) -> None:
+        super().__init__(problem)
+        self.problem = problem
+
+
 class InvalidLLMResponseError(LLMProviderError):
     pass
 
@@ -44,6 +52,17 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=503,
             content={"detail": "AI provider is unavailable."},
+        )
+
+    @app.exception_handler(WritingNotDoneError)
+    async def handle_writing_not_done(
+        request: Request,
+        exc: WritingNotDoneError,
+    ) -> JSONResponse:
+        logger.warning("writing_not_done path=%s problem=%s", request.url.path, exc.problem)
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "WRITING_NOT_DONE", "problem": exc.problem},
         )
 
     @app.exception_handler(InvalidLLMResponseError)

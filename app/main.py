@@ -145,8 +145,16 @@ async def lifespan(application: FastAPI):
 
         application.state.settings = settings
 
+        writing_provider = (
+            get_or_create_ollama_provider(
+                settings.ollama_writing_model,
+                settings.ollama_num_gpu,
+            )
+            if settings.llm_provider == "ollama" and settings.ollama_writing_model
+            else provider
+        )
         application.state.writing_service = WritingService(
-            provider,
+            writing_provider,
             continue_provider,
         )
 

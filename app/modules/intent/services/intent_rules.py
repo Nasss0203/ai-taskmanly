@@ -3,6 +3,7 @@
 import re
 import unicodedata
 
+from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
 from app.modules.modification_planner.services.block_delete import parse_block_delete
 from app.modules.modification_planner.services.block_text import parse_block_text
@@ -46,9 +47,11 @@ def command_text(source: str) -> str:
 
 
 ACTION_PATTERNS: tuple[tuple[WritingActionName, str], ...] = (
-    ('IMPROVE', r'viet lai|sua cau|sua loi chinh ta|viet chuyen nghiep hon|kiem tra ngu phap|make (?:it|this) more formal|paraphrase|rewrite|improve'),
+    ('IMPROVE', r'viet lai|sua cau|sua loi chinh ta|viet chuyen nghiep hon|kiem tra ngu phap|make (?:it|this) more formal|paraphrase|rewrite|improve'
+                r'|viet (?:cho )?hay hon|sua cho muot'),
     ('SHORTEN', r'rut gon|viet ngan lai|ngan gon|make (?:it|this) shorter|shorten'),
-    ('EXPAND', r'viet dai hon|chi tiet hon|them vi du minh hoa cho doan nay|elaborate|expand'),
+    # Kế hoạch sửa tính năng viết (V1): "mở rộng thêm ý", "viết dài ra".
+    ('EXPAND', r'viet dai hon|viet dai ra|chi tiet hon|them vi du minh hoa cho doan nay|elaborate|expand|mo rong'),
     ('SUMMARIZE', r'tom tat|tom lai y chinh|tl;dr|liet ke \d+ y chinh|summarize'),
     ('CONTINUE', r'viet tiep|continue'),
     ('TRANSLATE', r'dich(?!\s+vu\b)|translate|sang tieng|(?:english|japanese|korean|vietnamese|french) please'),
@@ -59,6 +62,9 @@ EDIT_COMMAND = re.compile(
     # Kế hoạch tích to-do: ticking and unticking existing to-dos.
     r'tich(?!\s+(?:hop|cuc)\b)|danh dau|bo tich|bo danh dau|hoan thanh|lam xong|'
     r'check(?!\s+list\b)|uncheck|mark|complete|finish)\b',
+)
+OTHER_ACTION = re.compile(
+    r'^(?:gui|dang|xoa|chia se|luu|in ra|send|post|share|email|publish|save|delete)\b'
 )
 CREATE_COMMAND = re.compile(r'^(?:tao|create|make|new page|lap ke hoach|soan tai lieu)\b')
 LANGUAGES = {
@@ -95,7 +101,8 @@ def inline_source(source: str) -> str | None:
     quote = QUOTED_TEXT.search(source)
     if quote and not re.search(r'\b(?:sang|to)\s+(?:tieng\s+)?$', fold(source[:quote.start()]).strip()):
         return quote.group()[1:-1].strip() or None
-    return None
+    # Kế hoạch sửa tính năng viết (V2): no ":" or quotes ("dịch sang tiếng Anh chúc …").
+    return None if quote else inline_writing_text(source)
 
 
 def directive_text(source: str) -> str:
@@ -216,6 +223,11 @@ def multiple_commands(source: str) -> bool:
         elif EDIT_COMMAND.match(clause):
             categories.append('EDIT')
     if len(set(categories)) > 1:
+        return True
+    # Kế hoạch sửa tính năng viết: "dịch sang tiếng Anh rồi gửi email cho sếp" —
+    # a second action after "rồi / sau đó / then" that AI does not do.
+    if categories and any(OTHER_ACTION.match(clause)
+                          for clause in re.split(r'\s+(?:roi|sau do|then|and then)\s+', text)[1:]):
         return True
     if (has_multiple_page_targets(source) and len(categories) > 1
             and not creation_evidence(source)):
