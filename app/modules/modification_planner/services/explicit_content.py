@@ -29,7 +29,9 @@ _QTY = r"(?:(?:một|vài|các|những|a|an|the|new|mới|another|\d+)\s+)*"
 # Longest spellings first; "checklist" may follow a one-word name ("a QA checklist").
 _KINDS = (
     # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
-    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|việc cần làm|danh sách"),
+    # S1: "with todos a, b" / "với các to-do a, b": a plural kind lists its items.
+    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|việc cần làm|danh sách|"
+             r"to-dos|todos"),
     ("HEADER", r"heading|tiêu đề"),
     ("TODO", r"to-do|todo|việc"),
     ("QUOTE", r"trích dẫn|quote"),
@@ -41,7 +43,17 @@ OBJECT = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 # A new clause starts only where "và / and" is followed by another block kind.
-CLAUSE = re.compile(rf"\s+(?:và|and)\s+(?={_QTY}(?:\S+\s+(?=(?:{_KINDS[0][1]})\b))?(?:{_KIND})(?![\w-]))", re.IGNORECASE)
+KIND_INSIDE = re.compile(
+    r"\s(?:với|with|và|and|kèm|cùng)\s+(?:(?:các|những|một|a|an|the|some)\s+)?"
+    r"(?:to-dos?|todos?|headings?|checklists?|tiêu đề|đoạn văn|trích dẫn|quotes?)(?![\w-])",
+    re.IGNORECASE,
+)
+CLAUSE = re.compile(
+    rf"\s+(?:và|and)\s+(?={_QTY}(?:\S+\s+(?=(?:{_KINDS[0][1]})\b))?(?:{_KIND})(?![\w-]))"
+    # S1: "heading Budget with todos a, b"; only a list kind follows "with" (not "with text …").
+    r"|\s+with\s+(?=(?:the\s+)?(?:to-dos|todos|checklist)(?![\w-]))",
+    re.IGNORECASE,
+)
 # Where the blocks go, never content: "ở cuối trang", "ngay sau to-do X", "under the X heading".
 POSITION = re.compile(
     r"\s+(?:ngay\s+)?(?:ở|vào|trong|dưới|sau|trước|tại)\s+(?:trong\s+)?"
@@ -104,6 +116,15 @@ def _list_items(listed: str) -> list[str] | None:
     return items
 
 
+def _topic_merged(listed: str) -> bool:
+    """ "checklist chuẩn bị họp in tài liệu, đặt phòng": without "gồm" a topic may
+    sit in the first item; a first item much longer than the others is unsure."""
+    parts = [part.split() for part in ITEM_SEPARATOR.split(listed) if part.strip()]
+    if len(parts) < 2:
+        return False
+    return len(parts[0]) > max(len(part) for part in parts[1:]) + 2
+
+
 def _kind_of(word: str) -> str:
     folded = word.casefold()
     return next(kind for kind, pattern in _KINDS if re.fullmatch(pattern, folded, re.IGNORECASE))
@@ -157,19 +178,29 @@ def parse_explicit_blocks(instruction: str) -> list[tuple[str, str]] | None:
             rest = ITEM_WORD.sub("", rest, count=1)
             marker = LIST_MARKER.search(rest)
             listed = _before_position(rest[marker.end():] if marker else rest)
-            if marker is None and UNSURE_TOPIC.search(listed):
+            # "thêm checklist in tài liệu, đặt phòng": with commas the words are the
+            # items even without "gồm / :" ("in" is then no place word).
+            if marker is None and ("," not in listed or _topic_merged(listed)) and UNSURE_TOPIC.search(listed):
                 return None
             items = _list_items(listed)
-            if not items:
+            if not items or (marker is None and _topic_merged(listed)):
                 return None
             blocks.extend(("TODO", _show(item, quoted)) for item in items)
         else:
             content_text = _before_position(rest)
+            # Bước 1 (bỏ dấu hai chấm): "thêm việc chuẩn bị slide, gửi lịch" is two to-dos.
+            if kind == "TODO" and "," in content_text and ":" not in content_text:
+                items = _list_items(content_text)
+                if not items or _topic_merged(content_text):
+                    return None
+                blocks.extend(("TODO", _show(item, quoted)) for item in items)
+                continue
             # "thêm to-do mua sắm: A, B": a list, not one block; unsure.
             if kind in ("TODO", "HEADER") and ":" in content_text:
                 return None
             content = _show(content_text, quoted)
-            if not content:
+            # S1 safety net: "heading Môn Anh với to-do học từ" names a second block.
+            if not content or KIND_INSIDE.search(content_text):
                 return None
             blocks.append((kind, content))
     return blocks or None

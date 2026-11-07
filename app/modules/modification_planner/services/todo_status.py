@@ -50,8 +50,11 @@ PATTERNS: tuple[tuple[bool, bool, re.Pattern[str]], ...] = tuple(
         (True, False, rf"(?:danh dau|mark)\s+{ITEMS}\s+(?:(?:la|as)\s+)?(?:da\s+)?{STATUS}(?:\s+roi)?"),
         (True, False, rf"(?:hoan thanh|lam xong|complete|finish)\s+{ITEMS}"),
         # "tích hợp" (integrate) and "tích cực" are not ticks; "check list" is a list.
-        (True, False, rf"(?:tich(?!\s+(?:hop|cuc)\b)|check(?!\s+list\b))\s+{ITEMS}"),
+        # S4: "tích xong X" / "tich xong X" puts the status first.
+        (True, False, rf"(?:tich(?!\s+(?:hop|cuc)\b)|check(?!\s+list\b))(?:\s+(?:da\s+)?{STATUS})?\s+{ITEMS}"),
         (True, True, rf"{ITEMS}\s+(?:da\s+)?{STATUS}(?:\s+roi)?"),
+        # S3 (DS2): "đã gửi thông báo cho đội" ticks the one to-do it names; else asked back.
+        (True, True, rf"da\s+{ITEMS}"),
     )
 )
 

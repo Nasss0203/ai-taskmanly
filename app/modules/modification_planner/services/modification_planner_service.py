@@ -40,12 +40,14 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
 )
 from app.shared.json_parser import parse_json_object
 from app.modules.modification_planner.services.block_delete import plan_block_delete
+from app.modules.modification_planner.services.database_rows import DATABASE_ROWS_MODEL, plan_database_rows
 from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
 from app.modules.modification_planner.services.context_window import window_context
 from app.modules.modification_planner.services.explicit_plan import EXPLICIT_CONTENT_MODEL, plan_explicit_content
 from app.modules.modification_planner.services.explicit_content import mentions_position, parse_explicit_blocks
 from app.modules.modification_planner.services.sentence_text import QUOTES, command_text
 from app.modules.modification_planner.services.block_text import plan_block_text
+from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
 from app.modules.modification_planner.services.todo_status import (
     TODO_STATUS_MODEL,
     TODO_STATUS_PROVIDER,
@@ -137,6 +139,11 @@ class ModificationPlannerService:
         self,
         request: ModificationPlannerRequest,
     ) -> ModificationPlannerResponse:
+        # Kế hoạch sửa lỗi người dùng giả lập (S2–S5): everyday wording ("bạn có
+        # thể sửa giúp tôi A thành B được không") in the forms the rules read.
+        normalized = normalize_instruction(request.instruction)
+        if normalized != request.instruction:
+            request = request.model_copy(update={"instruction": normalized})
         # Ticks, text edits and deletes of existing blocks are matched by rules,
         # never by the model (kế hoạch tích to-do, sửa chữ block, xoá block).
         for plan_by_rules, model in (
@@ -145,6 +152,8 @@ class ModificationPlannerService:
             (plan_block_delete, BLOCK_DELETE_MODEL),
             # A named section or table the Page lacks is asked back, never guessed.
             (plan_missing_target, MISSING_TARGET_MODEL),
+            # Kế hoạch sửa lỗi tạo trang và bảng (P6): rows of a named table.
+            (plan_database_rows, DATABASE_ROWS_MODEL),
         ):
             rule_plan = plan_by_rules(request.instruction, request.context)
             if rule_plan is not None:

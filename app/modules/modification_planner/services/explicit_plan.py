@@ -20,7 +20,8 @@ from app.modules.modification_planner.services.explicit_content import (
     parse_explicit_blocks,
 )
 from app.modules.modification_planner.services.block_text import match_exact, match_partial, text_blocks
-from app.modules.modification_planner.services.sentence_text import text_key
+from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
+from app.modules.modification_planner.services.sentence_text import Folded, fold, text_key
 from app.modules.modification_planner.services.todo_status import PLAN_ADAPTER
 from app.shared.list_markers import strip_list_marker
 
@@ -49,13 +50,77 @@ def _block(kind: str, text: str) -> dict[str, Any]:
     return {"type": kind, "content": {"text": text}}
 
 
+# S1 (kế hoạch sửa lỗi người dùng giả lập): "vào Môn Toán", "vô môn toán",
+# "to Packing" name a section without "phần": only when the words are exactly
+# one root heading / toggle of the Page. Otherwise they stay content.
+BARE_PLACE = re.compile(r"\s(?:vào|vô|trong|to|in|into|under)\s+(?:the\s+)?(?P<name>[^,.;:!?\"“”]+?)\s*[.!]*$",
+                        re.IGNORECASE)
+PLACE_WORDS = {"vao", "vo", "trong", "to", "in", "into", "under", "cho"}
+
+
+def _sections(context: AiPageContext) -> list[Any]:
+    return [block for block in context.blocks
+            if block.parentBlockId is None and block.type in ("HEADER", "TOGGLE") and _text_of(block)]
+
+
+def _with_bare_place(instruction: str, context: AiPageContext) -> str:
+    """ "… vào Môn Toán" as "… vào phần Môn Toán" when Môn Toán is one section."""
+    match = BARE_PLACE.search(instruction)
+    if match is None:
+        return instruction
+    name = match.group("name").strip()
+    same = [block for block in _sections(context) if text_key(_text_of(block)) == text_key(name)]
+    if len(same) != 1:
+        return instruction
+    return f"{instruction[:match.start()]} vào phần {name}"
+
+
+PLACE_FIRST_LOOSE = re.compile(r"^(?P<lead>ghi them vao|them vao)\s+(?P<rest>.+)$")
+
+
+def _place_named_first(instruction: str, context: AiPageContext) -> str:
+    """Bước 4 (bỏ dấu hai chấm): "ghi thêm vào Tuần họp dời họp sang thứ Năm" /
+    "thêm vào phần Tuần họp chuẩn bị slide, gửi lịch": the section name is where a
+    real heading / toggle name ends; it then reads like the ":" form."""
+    if ":" in instruction:
+        return instruction
+    folded = Folded(instruction)
+    match = PLACE_FIRST_LOOSE.match(folded.value)
+    if match is None:
+        return instruction
+    rest = match.group("rest")
+    word = re.match(r"(?:phan|muc)\s+", rest)
+    start = word.end() if word else 0
+    names = sorted({fold(strip_list_marker(_text_of(block))) for block in _sections(context)}, key=len, reverse=True)
+    for name in names:
+        if rest[start:].startswith(name + " ") and len(rest) > start + len(name) + 1:
+            cut = match.start("rest") + start + len(name)
+            head = folded.original(0, cut).strip()
+            text = folded.original(cut, len(folded.value)).strip()
+            return normalize_instruction(f"{head}: {text}")
+    return instruction
+
+
+def _ends_with_a_place(blocks: list[tuple[str, str]], context: AiPageContext) -> bool:
+    """Safety net: content ending in "vào <a section name>" was not read cleanly."""
+    names = {text_key(_text_of(block)) for block in _sections(context)}
+    for _, value in blocks:
+        words = text_key(value).split()
+        for name in names:
+            size = len(name.split())
+            if size and len(words) > size and " ".join(words[-size:]) == name and words[-size - 1] in PLACE_WORDS:
+                return True
+    return False
+
+
 def plan_explicit_content(
     instruction: str, context: AiPageContext, references: Any,
 ) -> AiModificationPlan | None:
     if references:
         return None
+    instruction = _with_bare_place(_place_named_first(instruction, context), context)
     blocks = parse_explicit_blocks(instruction)
-    if blocks is None:
+    if blocks is None or _ends_with_a_place(blocks, context):
         return None
     text, _, _page_end = _command(instruction, context.page.title)
     place = _named_place(text, context) if POSITION.search(text) else _end_of_page(context)

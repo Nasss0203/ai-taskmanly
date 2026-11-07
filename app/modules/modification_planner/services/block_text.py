@@ -21,6 +21,7 @@ from app.modules.modification_planner.services.sentence_text import (
     text_key,
 )
 from app.modules.modification_planner.services.todo_status import PLAN_ADAPTER
+from app.shared.list_markers import LIST_MARKER
 
 EDITABLE_TYPES = ("TEXT", "HEADER", "QUOTE", "TODO", "TOGGLE")
 MAX_TEXT_LENGTH = 2000
@@ -181,7 +182,10 @@ def plan_block_text(instruction: str, context: AiPageContext) -> AiModificationP
     if ask is None:
         block = match.blocks[0]
         if match.span is None:
-            new_text = new
+            # "2. Thảo luận …" → "Thảo luận … quý 4": the user names the text, not
+            # its list number; the number stays unless they typed a new one.
+            marker = LIST_MARKER.match(block.text)
+            new_text = new if marker is None or LIST_MARKER.match(new) else marker.group(0) + new
         else:
             start, end = match.span
             new_text = block.text[:start] + new + block.text[end:]

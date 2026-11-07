@@ -1,0 +1,109 @@
+{
+  "_note": "Kế hoạch sửa lỗi người dùng giả lập (S2–S5): câu gốc → câu sau chuẩn hoá. Dùng chung: ai-taskmanly/evaluation/normalization_cases.json và be-task-management/.../ai-sentence-normalize.cases.json (chép giống nhau). NestJS so sánh trên chữ đã bỏ dấu, bỏ ngoặc kép.",
+  "cases": [
+    {
+      "input": "Bạn có thể sửa giúp tôi A thành B được không",
+      "output": "sửa A thành B"
+    },
+    {
+      "input": "xoá giúp mình 2 việc in tài liệu với đặt phòng",
+      "output": "xoá in tài liệu và đặt phòng"
+    },
+    {
+      "input": "xoá 3 việc in tài liệu, đặt phòng",
+      "output": "xoá 3 việc in tài liệu, đặt phòng"
+    },
+    {
+      "input": "sửa Cập nhật báo cáo -> Cập nhật báo cáo tháng 11",
+      "output": "sửa Cập nhật báo cáo thành Cập nhật báo cáo tháng 11"
+    },
+    {
+      "input": "thêm to do làm đề 2024",
+      "output": "thêm to-do làm đề 2024"
+    },
+    {
+      "input": "thêm todo Ôn chương 4 vô môn toán",
+      "output": "thêm todo Ôn chương 4 vào môn toán"
+    },
+    {
+      "input": "delete the phone charger item",
+      "output": "delete phone charger"
+    },
+    {
+      "input": "việc gửi email chưa xong, bỏ đánh dấu đi",
+      "output": "bỏ tích gửi email"
+    },
+    {
+      "input": "ghi thêm vào tài liệu tham khảo: đề cương của cô Hạnh",
+      "output": "thêm đoạn văn \"đề cương của cô Hạnh\" vào tài liệu tham khảo"
+    },
+    {
+      "input": "Ghi chú lại giúp tôi: cuộc họp dời sang thứ Năm",
+      "output": "thêm ghi chú \"cuộc họp dời sang thứ Năm\""
+    },
+    {
+      "input": "thêm vào phần Việc tuần sau: họp với khách hàng, chốt hợp đồng",
+      "output": "thêm checklist gồm họp với khách hàng, chốt hợp đồng vào phần Việc tuần sau"
+    },
+    {
+      "input": "Trong trang Hội họp tuần, phần Đánh giá hiệu suất đội ngũ hãy thêm to-do Chuẩn bị số liệu KPI",
+      "output": "thêm to-do Chuẩn bị số liệu KPI vào phần Đánh giá hiệu suất đội ngũ Trong trang Hội họp tuần"
+    },
+    {
+      "input": "cho mình cái checklist ôn môn Lý gồm đọc lý thuyết, làm bài tập",
+      "output": "thêm checklist ôn môn Lý gồm đọc lý thuyết, làm bài tập"
+    },
+    {
+      "input": "Nhờ bạn thêm heading Kết luận nhé",
+      "output": "thêm heading Kết luận"
+    },
+    {
+      "input": "pls add todo buy sim card",
+      "output": "add todo buy sim card"
+    },
+    {
+      "input": "mình cần thêm môn Hoá nữa",
+      "output": "thêm môn Hoá nữa"
+    },
+    {
+      "input": "thêm đoạn văn họp với khách hàng lúc 3h",
+      "output": "thêm đoạn văn họp với khách hàng lúc 3h"
+    },
+    {
+      "input": "thêm to-do đi chợ",
+      "output": "thêm to-do đi chợ"
+    },
+    {
+      "input": "thêm to-do \"bạn có thể xoá giúp mình\"",
+      "output": "thêm to-do \"bạn có thể xoá giúp mình\""
+    },
+    {
+      "input": "đổi Gọi khách thành Gọi khách với sếp",
+      "output": "đổi Gọi khách thành Gọi khách với sếp"
+    },
+    {
+      "input": "thêm checklist gồm Chuẩn bị bữa trưa mang đi, Thiết kế thiệp cảm ơn",
+      "output": "thêm checklist gồm Chuẩn bị bữa trưa mang đi, Thiết kế thiệp cảm ơn"
+    },
+    {
+      "input": "xoá cái làm đề năm 2023 đi",
+      "output": "xoá làm đề năm 2023"
+    },
+    {
+      "input": "Bạn có thể sửa giúp tôi Thảo luận kế hoạch marketing tuần tới thành Thảo luận kế hoạch marketing quý 4 ở trang Hội họp tuần được không",
+      "output": "sửa Thảo luận kế hoạch marketing tuần tới thành Thảo luận kế hoạch marketing quý 4 ở trang Hội họp tuần"
+    },
+    {
+      "input": "Nhờ bạn thêm vào bảng Tasks dòng Kiểm thử hồi quy với trạng thái Done",
+      "output": "thêm dòng Kiểm thử hồi quy với trạng thái Done vào bảng Tasks"
+    },
+    {
+      "input": "thêm vào bảng Tasks 2 dòng: Kiểm tra bảo mật, Viết hướng dẫn",
+      "output": "thêm 2 dòng vào bảng Tasks: Kiểm tra bảo mật, Viết hướng dẫn"
+    },
+    {
+      "input": "ghi chú dời họp sang thứ Năm",
+      "output": "thêm ghi chú \"dời họp sang thứ Năm\""
+    }
+  ]
+}

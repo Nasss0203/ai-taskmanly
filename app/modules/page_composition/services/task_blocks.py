@@ -56,6 +56,11 @@ def normalize_task_blocks(
             # heading are tasks (keeps FAQs).
             if not (task_request or has_list_marker(text)
                     or TASK_REQUEST.search(section[block["ref"]])):
+                # Any other empty TOGGLE (the 8-block page budget leaves no room
+                # for children) would render as a line that does not open: TEXT.
+                block["type"] = "TEXT"
+                block["content"] = {"text": strip_list_marker(text)}
+                changed = True
                 continue
             block["type"] = "TODO"
             block["content"] = {"text": strip_list_marker(text), "checked": False}

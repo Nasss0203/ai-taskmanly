@@ -303,8 +303,11 @@ async def main(args: argparse.Namespace) -> int:
     providers = {
         name: OllamaProvider(base_url=config.ollama_base_url, model_name=model,
                              timeout_seconds=config.ollama_timeout_seconds, num_ctx=config.ollama_num_ctx,
-                             num_gpu=(config.ollama_modification_planner_num_gpu if name == "planner" else None)
-                             or config.ollama_num_gpu)
+                             # As app/main.py: OLLAMA_MODEL_NUM_GPU gives a model one placement,
+                             # so capabilities share one loaded copy instead of reloading it.
+                             num_gpu=config.ollama_model_num_gpu.get(
+                                 model, (config.ollama_modification_planner_num_gpu if name == "planner" else None)
+                                 or config.ollama_num_gpu))
         for name, model in models.items()
     }
     try:

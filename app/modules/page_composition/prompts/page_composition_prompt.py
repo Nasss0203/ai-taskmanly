@@ -152,12 +152,14 @@ CHỌN LOẠI BLOCK:
 
 ĐỘ DÀI TRANG:
 
-- Trang mới phải gọn: tối đa 12 block ở cấp ngoài cùng.
+- Trang mới phải gọn: TỐI ĐA 8 block, tính cả block con trong TOGGLE
+  (DATABASE_VIEW tính là 1 block; property, view, row không phải block).
+  Người dùng có thể tự thêm sau; trang ngắn được tạo nhanh hơn.
 - Nếu người dùng tự liệt kê nhiều mục hơn thì giữ đủ các mục đó.
 - Mục người dùng tự liệt kê phải giữ nguyên chữ (chỉ viết hoa chữ cái đầu),
   không thêm hay bớt từ.
 - Mỗi TEXT tối đa 2 câu ngắn. Không lặp lại ý.
-- FAQ / hỏi đáp: tối đa 5 câu hỏi. Mỗi câu hỏi là một HEADER, câu trả lời là
+- FAQ / hỏi đáp: tối đa 3 câu hỏi. Mỗi câu hỏi là một HEADER, câu trả lời là
   một TEXT ngắn ngay sau. Câu hỏi không phải việc cần làm, không dùng TODO.
 
 Nếu block có parentRef:

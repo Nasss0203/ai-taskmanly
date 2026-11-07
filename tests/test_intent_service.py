@@ -210,7 +210,9 @@ def test_clear_missing_action_skips_llm(source):
 def test_soft_creation_is_grounded_after_model_classification(source):
     response, provider = run(source, [json.dumps(extraction())])
     assert response.result.intent == 'CREATE_PAGE'
-    assert len(provider.calls) == 1
+    # P3 (kế hoạch sửa lỗi tạo trang): "làm cho tôi một trang" now reads as
+    # "tạo trang" and is decided by rule, without the model.
+    assert len(provider.calls) <= 1
 
 
 @pytest.mark.parametrize('source', [

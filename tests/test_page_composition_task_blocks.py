@@ -51,7 +51,9 @@ def test_keeps_toggles_with_children_faq_lines_and_explicit_requests() -> None:
         {"ref": "a", "type": "TEXT", "content": {"text": "- Trả lời"}, "parentRef": "q"},
         toggle("faq", "Làm sao để đăng nhập?"),
     )
-    assert normalize_task_blocks(parent, "Tạo trang FAQ") == parent
+    # An empty TOGGLE does not open: it becomes a TEXT line (kế hoạch giới hạn 8 block).
+    assert kinds(normalize_task_blocks(parent, "Tạo trang FAQ")) == [
+        ("TOGGLE", "Câu hỏi 1?"), ("TEXT", "- Trả lời"), ("TEXT", "Làm sao để đăng nhập?")]
     explicit = draft(toggle("a", "- Mục 1"))
     assert normalize_task_blocks(explicit, "Tạo trang có các toggle cho từng mục") == explicit
 
@@ -90,5 +92,5 @@ def test_toggles_under_a_task_heading_become_todos() -> None:
     assert kinds(result) == [
         ("HEADER", "Các nhiệm vụ cần hoàn thành:"), ("TODO", "Xem lại báo cáo tiến độ"),
         ("TODO", "Xác nhận lịch họp tuần tới"), ("HEADER", "Câu hỏi thường gặp"),
-        ("TOGGLE", "Làm sao để đăng nhập?"),
+        ("TEXT", "Làm sao để đăng nhập?"),
     ]

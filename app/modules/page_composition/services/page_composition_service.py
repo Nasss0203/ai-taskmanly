@@ -19,6 +19,7 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionResponse,
     PageCompositionUsage,
 )
+from app.modules.modification_planner.services.sentence_normalize import normalize_create_instruction
 from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.services.content_lock import (
     compose_explicit_page,
@@ -34,7 +35,7 @@ from app.shared.json_parser import parse_json_object
 
 logger = logging.getLogger(__name__)
 
-# A compact page (about 12 blocks, or a 20-row table) fits well within this;
+# A compact page (at most 8 blocks, or a 20-row table) fits well within this;
 # every token costs time on a model that runs partly on the CPU.
 MAX_NEW_TOKENS = 2000
 EXPLICIT_PAGE_MODEL = "explicit-page-v1"
@@ -51,6 +52,10 @@ class PageCompositionService:
         self,
         request: PageCompositionRequest,
     ) -> PageCompositionResponse:
+        # P3 (kế hoạch sửa lỗi tạo trang): "nhờ bạn tạo giúp tôi một trang …".
+        normalized = normalize_create_instruction(request.instruction)
+        if normalized != request.instruction:
+            request = request.model_copy(update={"instruction": normalized})
         # Kế hoạch bỏ qua model (F3): a page the sentence fully lists.
         explicit = compose_explicit_page(request.instruction)
         if explicit is not None:

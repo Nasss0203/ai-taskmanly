@@ -194,3 +194,16 @@ def test_planner_answers_text_edits_without_the_model() -> None:
     assert provider.calls == []
     assert (response.provider, response.model) == ("rules", "block-text-v1")
     assert response.result.operations[0].newText == "Việc tháng sau"
+
+
+def test_a_list_number_stays_when_the_new_text_has_none() -> None:
+    # Live: "sửa Thảo luận kế hoạch … tuần tới thành … quý 4" dropped the "2.".
+    from app.modules.modification_planner.schemas.modification_planner_schema import AiPageContext
+    from app.modules.modification_planner.services.block_text import plan_block_text
+    from scripts.evaluate_generation import CONTEXTS
+
+    context = AiPageContext.model_validate(CONTEXTS["meeting"])
+    plan = plan_block_text("sửa Thảo luận kế hoạch marketing tuần tới thành Thảo luận kế hoạch marketing quý 4", context)
+    assert plan.operations[0].newText == "2. Thảo luận kế hoạch marketing quý 4"
+    renumbered = plan_block_text("sửa Thảo luận kế hoạch marketing tuần tới thành 5. Kế hoạch quý 4", context)
+    assert renumbered.operations[0].newText == "5. Kế hoạch quý 4"

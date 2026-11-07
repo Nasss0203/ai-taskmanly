@@ -97,7 +97,12 @@ def plan_missing_target(instruction: str, context: AiPageContext) -> AiModificat
                 texts.append(text)
                 if block.type in ("HEADER", "TOGGLE"):
                     headings.append(text)
-        if not any(_contains(text, section) for text in texts):
+        # "thêm vào phần Việc tuần sau chuẩn bị slide, gửi lịch" (no ":"): the
+        # words after a real heading's name are content, not part of the name.
+        starts_with_heading = any(
+            text_key(section).startswith(text_key(heading) + " ") for heading in headings if text_key(heading)
+        )
+        if not starts_with_heading and not any(_contains(text, section) for text in texts):
             return _ask(
                 context, f'Trang không có phần "{section}".{_listed(headings, "Trang chưa có heading nào.")}',
                 "Bạn muốn thêm vào phần nào?",

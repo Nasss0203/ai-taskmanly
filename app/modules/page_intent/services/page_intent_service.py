@@ -2,6 +2,7 @@ import logging
 
 from pydantic import ValidationError
 
+from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
 from app.modules.page_intent.prompts.page_intent_prompt import SYSTEM_PROMPT
@@ -46,6 +47,11 @@ class PageIntentService:
         self.llm_provider = llm_provider
 
     async def process(self, request: PageIntentRequest) -> PageIntentResponse:
+        # Kế hoạch sửa lỗi người dùng giả lập (S2): "bạn có thể sửa giúp tôi … được
+        # không" is read like "sửa …", as the planner rules read it.
+        normalized = normalize_edit_instruction(request.instruction)
+        if normalized != request.instruction:
+            request = request.model_copy(update={"instruction": normalized})
         # M8 (I2): "… dựa trên trang Bug tracker" names where the facts come
         # from. The rest of the sentence is read as usual; the source is only
         # handed back for an edit.

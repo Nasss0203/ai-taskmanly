@@ -2,6 +2,7 @@ import logging
 
 from pydantic import ValidationError
 
+from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
 from app.modules.intent.prompts.intent_prompt import build_intent_prompt
@@ -25,6 +26,11 @@ class IntentService:
         self.llm_provider = llm_provider
 
     async def process(self, request: IntentRequest) -> IntentResponse:
+        # Kế hoạch sửa lỗi người dùng giả lập (S2): "bạn có thể sửa giúp tôi … được
+        # không" is read like "sửa …", as the planner rules read it.
+        normalized = normalize_edit_instruction(request.instruction)
+        if normalized != request.instruction:
+            request = request.model_copy(update={"instruction": normalized})
         deterministic = deterministic_result(request)
         if deterministic is not None:
             return IntentResponse(
