@@ -9,7 +9,7 @@ from app.shared.request_limits import MAX_BODY_BYTES, MAX_JSON_DEPTH
 AI_REQUEST_PATHS = frozenset({
     "/internal/v1/writing", "/internal/v1/page-composition",
     "/internal/v1/modification-planner", "/internal/v1/page-intent",
-    "/internal/v1/intent", "/internal/v1/embeddings",
+    "/internal/v1/intent", "/internal/v1/embeddings", "/internal/v1/page-question",
 })
 
 

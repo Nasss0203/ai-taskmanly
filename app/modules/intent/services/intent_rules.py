@@ -5,6 +5,7 @@ import unicodedata
 
 from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
+from app.modules.intent.services.page_question_rules import page_question
 from app.modules.modification_planner.services.block_delete import parse_block_delete
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
@@ -244,6 +245,16 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     # without an edit, "tìm …" stays a read-only request below.
     if content_page_reference(source) is not None:
         return result('MODIFY_PAGE')
+    # AI-Q1: a question about one Page or table is answered, read only.
+    if not request.selectedText and not inline_source(source):
+        question = page_question(source, has_current_page=bool(request.currentPageId))
+        if question is not None and question.kind == 'MIXED':
+            return result('UNCLEAR')
+        if question is not None:
+            return IntentResult(
+                intent='PAGE_QUESTION', questionKind=question.kind,
+                pageReference=question.page_reference, databaseReference=question.database_reference,
+            )
     if is_page_summary(source) or is_read_only(source) or unsupported_request(source):
         return result('OTHER')
     text = directive_text(source)

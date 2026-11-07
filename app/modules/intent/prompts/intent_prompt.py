@@ -23,7 +23,8 @@ TRANSLATE requires a target language stated in the original instruction.
 OTHER: information, read/view/search requests, greetings or unsupported capability.
 UNCLEAR: missing source/target/action/language, uncertain meaning or mixed commands.
 Do not promote a read-only question into a Page edit. Do not invent an action.
-Page Summary is OTHER for MVP: there is no whole-Page summary workflow.
+A question about a Page's content (summary, unfinished to-dos, table counts) is
+answered by rules before you; if one still reaches you, return OTHER.
 For non-WRITING intents set writingAction and language to null.
 Use literal JSON null, never the string "null" or an empty string. Never
 choose a Writing action just to fill a non-WRITING result. For Writing
@@ -45,7 +46,6 @@ Examples: each output is a complete JSON object. Return only the output.
 {"instruction":"Viết tiếp","hasSelection":true,"output":{"intent":"WRITING","writingAction":"CONTINUE","language":null}}
 {"instruction":"Dịch \"Hello\" sang tiếng Việt","output":{"intent":"WRITING","writingAction":"TRANSLATE","language":"Vietnamese"}}
 {"instruction":"Read page Project Notes","output":{"intent":"OTHER","writingAction":null,"language":null}}
-{"instruction":"Tóm tắt trang \"Dự án\"","output":{"intent":"OTHER","writingAction":null,"language":null}}
 {"instruction":"Lên kế hoạch là gì?","output":{"intent":"OTHER","writingAction":null,"language":null}}
 {"instruction":"Dịch đoạn này rồi tóm tắt","hasSelection":true,"output":{"intent":"UNCLEAR","writingAction":null,"language":null}}
 '''.strip()

@@ -8,6 +8,7 @@ from app.modules.modification_planner.router import (
     router as modification_planner_router,
 )
 from app.modules.page_intent.router import router as page_intent_router
+from app.modules.page_question.router import router as page_question_router
 from app.modules.page_composition.router import (
     router as page_composition_router,
 )
@@ -49,6 +50,12 @@ router.include_router(
     page_intent_router,
     prefix="/page-intent",
     tags=["AI Page Intent"],
+)
+
+router.include_router(
+    page_question_router,
+    prefix="/page-question",
+    tags=["AI Page Question"],
 )
 
 router.include_router(

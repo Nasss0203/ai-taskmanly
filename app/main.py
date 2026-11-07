@@ -17,6 +17,7 @@ from app.modules.modification_planner.services.modification_planner_service impo
 )
 from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.page_composition.services import PageCompositionService
+from app.modules.page_question.service import PageQuestionService
 from app.modules.writing.services import WritingService
 
 
@@ -157,6 +158,8 @@ async def lifespan(application: FastAPI):
             writing_provider,
             continue_provider,
         )
+        # AI-Q1: a summary or free question about a Page uses the writing model.
+        application.state.page_question_service = PageQuestionService(writing_provider)
 
         application.state.page_composition_service = (
             PageCompositionService(
