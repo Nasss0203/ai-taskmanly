@@ -11,6 +11,7 @@ compare models, e.g. ``--model qwen3:8b`` or ``--planner-model qwen3:8b``.
 import argparse
 import asyncio
 import json
+import re
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
@@ -173,6 +174,16 @@ def check_composition(draft: dict[str, Any], expect: dict[str, Any]) -> list[str
                    for o in p.get("options") or []}
         if not {_text(o) for o in expect["select_options"]} <= options:
             failed.append("select_options")
+    if "rows" in expect and sum(len(db.get("rows") or []) for db in draft.get("databases", [])) != expect["rows"]:
+        failed.append("rows")
+    if expect.get("no_table_lines"):
+        columns = [_text(p["name"]) for db in draft.get("databases", []) for p in db.get("properties", [])]
+        for block in blocks:
+            text = _text((block.get("content") or {}).get("text", ""))
+            if block.get("type") in ("TEXT", "HEADER") and (
+                    re.search(r"\b(?:cột|columns?)\b", text) or sum(column in text for column in columns if column) >= 2):
+                failed.append("no_table_lines")
+                break
     return failed
 
 

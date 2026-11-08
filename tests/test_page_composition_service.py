@@ -150,7 +150,7 @@ def test_page_composition_returns_valid_draft() -> None:
     assert response.result.type == "PAGE_COMPOSITION"
     assert response.result.page.title == "Sprint Planning"
 
-    assert len(response.result.blocks) == 3
+    assert [block.type for block in response.result.blocks] == ["HEADER", "DATABASE_VIEW"]
     assert len(response.result.databases) == 1
 
     database = response.result.databases[0]
@@ -158,7 +158,7 @@ def test_page_composition_returns_valid_draft() -> None:
     assert database.ref == "database_tasks"
     assert len(database.properties) == 5
     assert len(database.views) == 1
-    assert len(database.rows) == 1
+    assert database.rows == []
 
     assert len(provider.calls) == 1
     assert provider.calls[0]["max_new_tokens"] == 2000
@@ -398,7 +398,7 @@ def test_page_composition_repairs_semantically_invalid_draft() -> None:
     )
 
     assert response.result.page.title == "Sprint Planning"
-    assert len(response.result.blocks) == 3
+    assert [block.type for block in response.result.blocks] == ["HEADER", "DATABASE_VIEW"]
     assert len(response.result.databases) == 1
 
     assert len(provider.calls) == 2

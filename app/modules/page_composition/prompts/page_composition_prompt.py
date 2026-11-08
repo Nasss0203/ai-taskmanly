@@ -211,14 +211,15 @@ TABLE view:
   "type": "TABLE"
 }
 
-Row:
+Rows: mặc định "rows": []. Chỉ tạo row khi người dùng đưa dữ liệu cho từng
+dòng hoặc xin dòng mẫu; khi đó mỗi row có dạng:
 
 {
   "ref": "row_1",
   "values": {
-    "property_name": "Task 1",
+    "property_name": "<tên dòng>",
     "property_status": {
-      "optionRef": "option_todo"
+      "optionRef": "<ref của option>"
     }
   }
 }

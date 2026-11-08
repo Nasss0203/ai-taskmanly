@@ -3,7 +3,7 @@ from scripts.evaluate_generation import CONTEXTS, DEFAULT_CASES, check_compositi
 
 KNOWN_EXPECTATIONS = {
     "title", "todo_texts", "min_todos", "no_todos", "no_childless_toggles", "min_toggles", "databases",
-    "property_types", "select_options", "max_headers", "status", "max_operations", "operation_types", "block_types",
+    "property_types", "select_options", "max_headers", "rows", "no_table_lines", "status", "max_operations", "operation_types", "block_types",
     "texts_contain", "max_new_blocks", "after_block", "parent_block", "row_titles", "row_option", "todo_updates", "text_edits", "deletes",
 }
 

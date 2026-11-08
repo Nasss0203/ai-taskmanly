@@ -21,6 +21,30 @@ from app.modules.page_composition.schemas.page_composition_schema import PageCom
 COLUMNS = re.compile(r"\b(?:cột|columns?)\s*:?\s*(?P<list>.+)$", re.IGNORECASE)
 OPTIONS = re.compile(r"\(([^()]*)\)")
 SPLIT = re.compile(r"\s*,\s*|\s+(?:và|and)\s+", re.IGNORECASE)
+ROW_REQUEST = re.compile(
+    r"\b(?:dòng|bản ghi|dữ liệu mẫu|rows?|records?|sample)\b|\b(?:các|những|\d+)\s+(?:dong|ban ghi)\b",
+    re.IGNORECASE,
+)
+TABLE_WORD = re.compile(r"\b(?:bảng|bang|database|cơ sở dữ liệu|table)\b", re.IGNORECASE)
+TASK_REQUEST = re.compile(
+    r"\b(?:gồm|gom|bao gồm|checklist|to-?do|việc|viec|nhiệm vụ|nhiem vu|tasks?|kế hoạch|ke hoach|plan)\b|:",
+    re.IGNORECASE,
+)
+STRUCTURE_WORD = re.compile(r"\b(?:cot|columns?)\b")
+
+
+def _named(name: str, key: str) -> bool:
+    name_key = text_key(name)
+    return bool(name_key) and re.search(rf"(?<!\w){re.escape(name_key)}(?!\w)", key) is not None
+
+
+def _describes_table(text: str, columns: list[str], options: list[str]) -> bool:
+    key = text_key(text)
+    if STRUCTURE_WORD.search(key):
+        return True
+    if sum(_named(column, key) for column in columns) >= 2:
+        return True
+    return bool(re.search(r"\bco the la\b", key)) and any(_named(option, key) for option in options)
 
 
 def _named_columns(instruction: str) -> list[tuple[str, list[str]]] | None:
@@ -74,6 +98,23 @@ def complete_databases(draft: PageCompositionDraft, instruction: str) -> PageCom
     names.update(text_key(f"bảng {db['name']}") for db in data["databases"])
     kept = [block for block in data["blocks"]
             if not (block["type"] in ("TEXT", "TODO") and text_key((block.get("content") or {}).get("text", "")) in names)]
+    if len(kept) != len(data["blocks"]):
+        data["blocks"], changed = kept, True
+
+    sentence = unicodedata.normalize("NFC", instruction)
+    if not ROW_REQUEST.search(sentence):
+        for db in data["databases"]:
+            if db.get("rows"):
+                db["rows"], changed = [], True
+    table_at = TABLE_WORD.search(sentence)
+    only_table = table_at is not None and not TASK_REQUEST.search(sentence[:table_at.start()])
+    column_names = [prop["name"] for db in data["databases"] for prop in db["properties"]]
+    option_names = [option["name"] for db in data["databases"] for prop in db["properties"]
+                    for option in prop.get("options") or []]
+    kept = [block for block in data["blocks"]
+            if not (only_table and block["type"] == "TODO")
+            and not (block["type"] in ("TEXT", "HEADER")
+                     and _describes_table((block.get("content") or {}).get("text", ""), column_names, option_names))]
     if len(kept) != len(data["blocks"]):
         data["blocks"], changed = kept, True
 
