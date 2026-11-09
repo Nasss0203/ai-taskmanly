@@ -28,8 +28,8 @@ def test_a_table_is_shown_with_the_users_column_names() -> None:
     props = result.databases[0].properties
     assert [p.name for p in props] == ["Tên", "Trạng thái"]
     assert [o.name for o in props[1].options] == ["Todo", "Done"]
-    assert [b.type for b in result.blocks] == ["HEADER", "TEXT", "DATABASE_VIEW"]
-    assert result.blocks[2].databaseRef == "db" and result.blocks[2].viewRef == "v"
+    assert [b.type for b in result.blocks] == ["HEADER", "DATABASE_VIEW"]
+    assert result.blocks[1].databaseRef == "db" and result.blocks[1].viewRef == "v"
 
 
 def test_columns_are_kept_when_the_count_differs() -> None:
@@ -71,8 +71,47 @@ def test_a_table_the_sentence_gives_no_rows_for_stays_empty() -> None:
 def test_a_table_only_request_drops_invented_todos_and_lines_about_the_columns() -> None:
     result = complete_databases(invented(), ONLY_TABLE)
     texts = [b.content.text for b in result.blocks if b.type != "DATABASE_VIEW"]
-    assert texts == ["Trang Cho thuê nhà", "Dưới đây là danh sách các nhiệm vụ.", "Ghi chú: nhớ gọi khách trước thứ Sáu."]
+    assert texts == ["Trang Cho thuê nhà"]
     assert [b.type for b in result.blocks].count("DATABASE_VIEW") == 1
+
+
+def filler(title: str, table: str) -> PageCompositionDraft:
+    return PageCompositionDraft.model_validate({
+        "schemaVersion": 1, "type": "PAGE_COMPOSITION", "page": {"title": title},
+        "blocks": [
+            {"ref": "h", "type": "HEADER", "content": {"text": title}, "styleConfig": {"level": 1}},
+            {"ref": "a", "type": "TEXT", "content": {"text": f"Tạo bảng {table}"}},
+            {"ref": "b", "type": "TEXT", "content": {"text": "Sách 1"}},
+            {"ref": "c", "type": "HEADER", "content": {"text": f"Bảng {table}"}},
+            {"ref": "d", "type": "TEXT", "content": {"text": "Tất cả công việc sẽ được cập nhật trong bảng dưới đây."}},
+            {"ref": "e", "type": "TODO", "content": {"text": "Công việc", "checked": False}},
+        ],
+        "databases": [{"ref": "db", "name": table, "properties": [
+            {"ref": "p1", "name": "Tên", "type": "TITLE"},
+        ], "views": [{"ref": "v", "name": "Bảng", "type": "TABLE"}], "rows": []}],
+    })
+
+
+@pytest.mark.parametrize(("sentence", "title", "table"), [
+    ("tạo trang Kế hoạch đọc sách có bảng theo dõi sách với cột tên sách, tác giả, trạng thái",
+     "Kế hoạch đọc sách", "theo dõi sách"),
+    ("Tôi cần một trang quản lý công việc của nhóm có bảng Tasks với cột Tên, Người phụ trách, Hạn chót",
+     "Quản lý công việc nhóm", "Tasks"),
+    ("tạo trang Thử L6 có bảng Sách với cột Tên sách, Tình trạng gồm Đang đọc, Đã đọc", "Thử L6", "Sách"),
+])
+def test_a_page_asking_only_for_a_table_keeps_the_title_and_the_table(sentence, title, table) -> None:
+    result = complete_databases(filler(title, table), sentence)
+    assert [(b.type, b.content.text if b.content else None) for b in result.blocks if b.type != "DATABASE_VIEW"] == [
+        ("HEADER", title)]
+    assert [b.type for b in result.blocks].count("DATABASE_VIEW") == 1
+
+
+def test_listed_content_keeps_its_lines_but_drops_echoes_of_the_table() -> None:
+    sentence = "Tạo trang Onboarding gồm: cấp laptop, tạo email và bảng Thiết bị với cột Tên"
+    result = complete_databases(filler("Onboarding", "Thiết bị"), sentence)
+    texts = [b.content.text for b in result.blocks if b.type != "DATABASE_VIEW"]
+    assert "Tạo bảng Thiết bị" not in texts and "Bảng Thiết bị" not in texts
+    assert "Công việc" in texts and "Sách 1" in texts
 
 
 @pytest.mark.parametrize("sentence", [

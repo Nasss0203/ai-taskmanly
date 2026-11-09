@@ -184,6 +184,14 @@ def check_composition(draft: dict[str, Any], expect: dict[str, Any]) -> list[str
                     re.search(r"\b(?:cột|columns?)\b", text) or sum(column in text for column in columns if column) >= 2):
                 failed.append("no_table_lines")
                 break
+    if "columns" in expect:
+        names = [_text(p["name"]) for db in draft.get("databases", []) for p in db.get("properties", [])]
+        if names != [_text(name) for name in expect["columns"]]:
+            failed.append("columns")
+    if expect.get("only_title_and_table"):
+        others = [block for block in blocks if block.get("type") != "DATABASE_VIEW"]
+        if len(others) > 1 or any(block.get("type") != "HEADER" for block in others):
+            failed.append("only_title_and_table")
     return failed
 
 

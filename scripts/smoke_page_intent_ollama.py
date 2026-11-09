@@ -45,7 +45,7 @@ CASES = [
     ),
     (
         "Thêm checklist vào page tôi sửa hôm qua",
-        ("MODIFY_PAGE", "UNRESOLVED", None, "Thêm checklist", True),
+        ("MODIFY_PAGE", "ACTIVITY", None, "Thêm checklist", False),
     ),
     (
         "Thêm checklist vào trang nói về OAuth",

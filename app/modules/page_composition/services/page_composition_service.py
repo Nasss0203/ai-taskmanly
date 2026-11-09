@@ -20,7 +20,7 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionUsage,
 )
 from app.modules.modification_planner.services.sentence_normalize import normalize_create_instruction
-from app.modules.page_composition.services.database_blocks import complete_databases
+from app.modules.page_composition.services.database_blocks import complete_databases, compose_table_page
 from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.services.content_lock import (
     compose_explicit_page,
@@ -58,7 +58,7 @@ class PageCompositionService:
         if normalized != request.instruction:
             request = request.model_copy(update={"instruction": normalized})
         # Kế hoạch bỏ qua model (F3): a page the sentence fully lists.
-        explicit = compose_explicit_page(request.instruction)
+        explicit = compose_explicit_page(request.instruction) or compose_table_page(request.instruction)
         if explicit is not None:
             validate_page_composition_semantics(explicit)
             logger.info("page_composition_rules model=%s", EXPLICIT_PAGE_MODEL)

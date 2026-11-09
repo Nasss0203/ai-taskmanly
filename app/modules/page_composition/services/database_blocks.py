@@ -18,8 +18,20 @@ import unicodedata
 from app.modules.modification_planner.services.sentence_text import text_key
 from app.modules.page_composition.schemas.page_composition_schema import PageCompositionDraft
 
-COLUMNS = re.compile(r"\b(?:cột|columns?)\s*:?\s*(?P<list>.+)$", re.IGNORECASE)
+COLUMNS = re.compile(r"\b(?:cột|cot|columns?)\s*:?\s*(?P<list>.+)$", re.IGNORECASE)
 OPTIONS = re.compile(r"\(([^()]*)\)")
+GROUPED_OPTIONS = re.compile(r"\s+(?:bao gồm|bao gom|gồm|gom)\s+(?P<items>[^\x00]+)$", re.IGNORECASE)
+TABLE_PAGE = re.compile(
+    r"^(?:tạo|tao|lập|lap|(?:tôi|toi|mình|minh|em)\s+(?:cần|can|muốn|muon)(?:\s+(?:tạo|tao))?)\s+"
+    r"(?:(?:một|mot|mới|moi)\s+)*trang\s+(?P<title>[^,:]+?)\s+"
+    r"(?:có|co|với|voi)\s+(?:(?:một|mot)\s+)?(?:bảng|bang)\b\s*(?P<table>[^,:]*?)\s*"
+    r"(?:(?:với|voi|gồm|gom|có|co)\s+)?(?:(?:các|cac)\s+)?(?:cột|cot)\b",
+    re.IGNORECASE,
+)
+DATE_COLUMN = re.compile(r"\b(?:ngay|han|date|deadline|due)\b")
+NUMBER_COLUMN = re.compile(
+    r"\b(?:so tien|thanh tien|chi phi|gia tien|don gia|so luong|amount|price|cost|quantity|qty)\b",
+)
 SPLIT = re.compile(r"\s*,\s*|\s+(?:và|and)\s+", re.IGNORECASE)
 ROW_REQUEST = re.compile(
     r"\b(?:dòng|bản ghi|dữ liệu mẫu|rows?|records?|sample)\b|\b(?:các|những|\d+)\s+(?:dong|ban ghi)\b",
@@ -31,6 +43,9 @@ TASK_REQUEST = re.compile(
     re.IGNORECASE,
 )
 STRUCTURE_WORD = re.compile(r"\b(?:cot|columns?)\b")
+CONTENT_REQUEST = re.compile(r"\b(?:gồm|gom|bao gồm|bao gom)\b|[:,]", re.IGNORECASE)
+LISTED_CONTENT = re.compile(r"\b(?:checklist|check list|to-?dos?|việc cần làm|viec can lam)\b", re.IGNORECASE)
+ECHO = r"(?:(?:tao|them|lap|create|add|make)\s+)?(?:(?:mot|a|an|the|new)\s+)?(?:bang|table|database)\s+"
 
 
 def _named(name: str, key: str) -> bool:
@@ -60,6 +75,10 @@ def _named_columns(instruction: str) -> list[tuple[str, list[str]]] | None:
         return f"\x00{len(options) - 1}\x00"
 
     hidden = OPTIONS.sub(keep, text)
+    grouped = GROUPED_OPTIONS.search(hidden)
+    if grouped:
+        options.append([item.strip() for item in SPLIT.split(grouped.group("items")) if item.strip()])
+        hidden = f"{hidden[:grouped.start()]}\x00{len(options) - 1}\x00"
     columns = []
     for part in SPLIT.split(hidden):
         marker = re.search(r"\x00(\d+)\x00", part)
@@ -68,6 +87,48 @@ def _named_columns(instruction: str) -> list[tuple[str, list[str]]] | None:
             return None
         columns.append((name[:1].upper() + name[1:], options[int(marker.group(1))] if marker else []))
     return columns or None
+
+
+def _column_type(index: int, name: str, options: list[str]) -> str:
+    if index == 0:
+        return "TITLE"
+    if options:
+        return "SELECT"
+    key = text_key(name)
+    if DATE_COLUMN.search(key):
+        return "DATE"
+    if NUMBER_COLUMN.search(key):
+        return "NUMBER"
+    return "TEXT"
+
+
+def compose_table_page(instruction: str) -> PageCompositionDraft | None:
+    sentence = unicodedata.normalize("NFC", instruction).strip()
+    match = TABLE_PAGE.match(sentence)
+    if match is None or ROW_REQUEST.search(sentence) or LISTED_CONTENT.search(sentence[:match.end()]):
+        return None
+    title = match.group("title").strip(" .")
+    if CONTENT_REQUEST.search(title) or TABLE_WORD.search(title):
+        return None
+    columns = _named_columns(sentence)
+    if not columns or any(":" in name for name, _ in columns):
+        return None
+    table = match.group("table").strip(" .") or "Bảng"
+    properties = [{
+        "ref": f"p{index}", "name": name, "type": _column_type(index, name, options),
+        **({"options": [{"ref": f"p{index}o{at}", "name": option} for at, option in enumerate(options)]}
+           if options and index else {}),
+    } for index, (name, options) in enumerate(columns)]
+    title = title[:1].upper() + title[1:]
+    return PageCompositionDraft.model_validate({
+        "schemaVersion": 1, "type": "PAGE_COMPOSITION", "page": {"title": title},
+        "blocks": [
+            {"ref": "h0", "type": "HEADER", "content": {"text": title}, "styleConfig": {"level": 1}},
+            {"ref": "view_block_db", "type": "DATABASE_VIEW", "databaseRef": "db", "viewRef": "v"},
+        ],
+        "databases": [{"ref": "db", "name": table[:1].upper() + table[1:], "properties": properties,
+                       "views": [{"ref": "v", "name": "Bảng", "type": "TABLE"}], "rows": []}],
+    })
 
 
 def complete_databases(draft: PageCompositionDraft, instruction: str) -> PageCompositionDraft:
@@ -108,11 +169,19 @@ def complete_databases(draft: PageCompositionDraft, instruction: str) -> PageCom
                 db["rows"], changed = [], True
     table_at = TABLE_WORD.search(sentence)
     only_table = table_at is not None and not TASK_REQUEST.search(sentence[:table_at.start()])
+    listed_columns = COLUMNS.search(sentence)
+    nothing_else = (table_at is not None and not CONTENT_REQUEST.search(sentence[:table_at.start()])
+                    and not LISTED_CONTENT.search(sentence[:listed_columns.start()] if listed_columns else sentence))
     column_names = [prop["name"] for db in data["databases"] for prop in db["properties"]]
     option_names = [option["name"] for db in data["databases"] for prop in db["properties"]
                     for option in prop.get("options") or []]
-    kept = [block for block in data["blocks"]
-            if not (only_table and block["type"] == "TODO")
+    echoes = [re.compile(rf"^{ECHO}{re.escape(text_key(db['name']))}$") for db in data["databases"] if text_key(db["name"])]
+    title_at = next((i for i, block in enumerate(data["blocks"]) if block["type"] == "HEADER"), None)
+    kept = [block for index, block in enumerate(data["blocks"])
+            if not (nothing_else and block["type"] != "DATABASE_VIEW" and index != title_at)
+            and not (only_table and block["type"] == "TODO")
+            and not (block["type"] in ("TEXT", "HEADER", "TODO")
+                     and any(echo.match(text_key((block.get("content") or {}).get("text", ""))) for echo in echoes))
             and not (block["type"] in ("TEXT", "HEADER")
                      and _describes_table((block.get("content") or {}).get("text", ""), column_names, option_names))]
     if len(kept) != len(data["blocks"]):
