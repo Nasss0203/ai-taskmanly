@@ -20,22 +20,24 @@ POLITE_TAIL = re.compile(
 # A page end is a place, not a Page target: cut it before TARGET reads "… to … page".
 PAGE_END = re.compile(
     r"\s+(?:(?:at|to)\s+the\s+(?:end|top|bottom|start)\s+of\s+(?:the|this)\s+page"
-    r"|(?:ở|vào)\s+(?:cuối|đầu)\s+trang(?:\s+này)?)\s*[.!]*$",
+    r"|(?:ở|o|vào|vao)\s+(?:cuối|cuoi|đầu|dau)\s+trang(?:\s+(?:này|nay))?)\s*[.!]*$",
     re.IGNORECASE,
 )
 
-INSERT = re.compile(r"^(?:thêm|chèn|bổ sung|ghi thêm|add|insert|append)\s+", re.IGNORECASE)
-_QTY = r"(?:(?:một|vài|các|những|a|an|the|new|mới|another|\d+)\s+)*"
+INSERT = re.compile(r"^(?:thêm|them|chèn|chen|bổ sung|bo sung|ghi thêm|ghi them|add|insert|append)\s+",
+                    re.IGNORECASE)
+_QTY = r"(?:(?:một|mot|vài|vai|các|cac|những|nhung|a|an|the|new|mới|moi|another|\d+)\s+)*"
 # Longest spellings first; "checklist" may follow a one-word name ("a QA checklist").
 _KINDS = (
     # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
     # S1: "with todos a, b" / "với các to-do a, b": a plural kind lists its items.
-    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|việc cần làm|danh sách|"
-             r"to-dos|todos"),
-    ("HEADER", r"heading|tiêu đề"),
-    ("TODO", r"to-do|todo|việc"),
-    ("QUOTE", r"trích dẫn|quote"),
-    ("TEXT", r"đoạn văn bản|đoạn văn|đoạn|paragraph|text|dòng chữ|dòng|line|ghi chú"),
+    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|danh sach viec|việc cần làm|"
+             r"viec can lam|danh sách|danh sach|to-dos|todos"),
+    ("HEADER", r"heading|tiêu đề|tieu de"),
+    ("TODO", r"to-do|todo|việc|viec"),
+    ("QUOTE", r"trích dẫn|trich dan|quote"),
+    ("TEXT", r"đoạn văn bản|doan van ban|đoạn văn|doan van|đoạn|doan|paragraph|text|dòng chữ|dong chu|dòng|dong|"
+             r"line|ghi chú|ghi chu"),
 )
 _KIND = "|".join(pattern for _, pattern in _KINDS)
 OBJECT = re.compile(
@@ -44,32 +46,34 @@ OBJECT = re.compile(
 )
 # A new clause starts only where "và / and" is followed by another block kind.
 KIND_INSIDE = re.compile(
-    r"\s(?:với|with|và|and|kèm|cùng)\s+(?:(?:các|những|một|a|an|the|some)\s+)?"
-    r"(?:to-dos?|todos?|headings?|checklists?|tiêu đề|đoạn văn|trích dẫn|quotes?)(?![\w-])",
+    r"\s(?:với|voi|with|và|va|and|kèm|kem|cùng|cung)\s+(?:(?:các|cac|những|nhung|một|mot|a|an|the|some)\s+)?"
+    r"(?:to-dos?|todos?|headings?|checklists?|tiêu đề|tieu de|đoạn văn|doan van|trích dẫn|trich dan|quotes?)(?![\w-])",
     re.IGNORECASE,
 )
 CLAUSE = re.compile(
-    rf"\s+(?:và|and)\s+(?={_QTY}(?:\S+\s+(?=(?:{_KINDS[0][1]})\b))?(?:{_KIND})(?![\w-]))"
+    rf"\s+(?:và|va|and)\s+(?={_QTY}(?:\S+\s+(?=(?:{_KINDS[0][1]})\b))?(?:{_KIND})(?![\w-]))"
     # S1: "heading Budget with todos a, b"; only a list kind follows "with" (not "with text …").
     r"|\s+with\s+(?=(?:the\s+)?(?:to-dos|todos|checklist)(?![\w-]))",
     re.IGNORECASE,
 )
 # Where the blocks go, never content: "ở cuối trang", "ngay sau to-do X", "under the X heading".
 POSITION = re.compile(
-    r"\s+(?:ngay\s+)?(?:ở|vào|trong|dưới|sau|trước|tại)\s+(?:trong\s+)?"
-    r"(?:cuối|đầu|phần|mục|heading|tiêu đề|dòng|to-do|todo|đoạn|block|toggle|checklist|danh sách|trang)(?![\w-])"
+    r"\s+(?:ngay\s+)?(?:ở|o|vào|vao|trong|dưới|duoi|sau|trước|truoc|tại|tai)\s+(?:trong\s+)?"
+    r"(?:cuối|cuoi|đầu|dau|phần|phan|mục|muc|heading|tiêu đề|tieu de|dòng|dong|to-do|todo|đoạn|doan|block|toggle|"
+    r"checklist|danh sách|danh sach|trang)(?![\w-])"
     r"|\s+(?:at|to|in|into|under|after|before|below|above|on)\s+(?:the|this)\s"
     r"|\s+(?:after|before|below|above|under)\s+",
     re.IGNORECASE,
 )
-LIST_MARKER = re.compile(r"(?:^|\s+)(?:bao gồm|gồm|with)\s+|\s*:\s*", re.IGNORECASE)
+LIST_MARKER = re.compile(r"(?:^|\s+)(?:bao gồm|bao gom|gồm|gom|with)\s+|\s*:\s*", re.IGNORECASE)
 ITEM_SEPARATOR = re.compile(r"\s*[,;]\s*")
-AND = re.compile(r"\s+(?:và|and)\s+", re.IGNORECASE)
+AND = re.compile(r"\s+(?:và|va|and)\s+", re.IGNORECASE)
 # "checklist item under Details": "item" says what is added, it is no topic.
 ITEM_WORD = re.compile(r"^(?:items?|mục)(?![\w-])\s*", re.IGNORECASE)
 # A topic still holding a place word was not cut cleanly ("how to cook pho").
 UNSURE_TOPIC = re.compile(
-    r"\b(?:under|at|to|in|into|on|after|before|below|above|vào|ở|tại|dưới|sau|trước|trong)\b", re.IGNORECASE,
+    r"\b(?:under|at|to|in|into|on|after|before|below|above|vào|vao|ở|tại|tai|dưới|duoi|sau|trước|truoc|trong)\b",
+    re.IGNORECASE,
 )
 # Database rows go through their own route; a table target is never locked here.
 TABLE = re.compile(r"\b(?:bảng|table|database|cơ sở dữ liệu)\b", re.IGNORECASE)
@@ -157,6 +161,25 @@ def mentions_position(instruction: str, page_title: str | None = None) -> bool:
     """
     text, _, page_end = _command(instruction, page_title)
     return page_end or POSITION.search(text) is not None
+
+
+def parse_kindless_items(instruction: str) -> list[str] | None:
+    text, quoted, _ = _command(instruction)
+    verb = INSERT.match(text)
+    if verb is None:
+        return None
+    body = text[verb.end():]
+    if TABLE.search(body) or OBJECT.match(body.strip()) or POSITION.search(body) is None:
+        return None
+    listed = _before_position(body)
+    if ":" in listed or KIND_INSIDE.search(listed):
+        return None
+    pieces = [piece.strip(STRIP) for part in ITEM_SEPARATOR.split(listed) for piece in AND.split(part)]
+    pieces = [piece for piece in pieces if piece]
+    sizes = {len(piece.split()) < 2 for piece in pieces}
+    if not pieces or (len(pieces) > 1 and len(sizes) > 1):
+        return None
+    return [_show(piece, quoted) for piece in pieces]
 
 
 def parse_explicit_blocks(instruction: str) -> list[tuple[str, str]] | None:

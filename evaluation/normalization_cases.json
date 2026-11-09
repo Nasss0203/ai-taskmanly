@@ -108,6 +108,50 @@
     {
       "input": "Nhờ bạn thêm vào bảng Tasks dòng Kiểm thử hồi quy ở trang Thử bảng AI 2",
       "output": "thêm dòng Kiểm thử hồi quy vào bảng Tasks ở trang Thử bảng AI 2"
+    },
+    {
+      "input": "tick đặt phòng",
+      "output": "tích đặt phòng"
+    },
+    {
+      "input": "tick xong đặt phòng ở trang sub man",
+      "output": "tích xong đặt phòng ở trang sub man"
+    },
+    {
+      "input": "untick đặt phòng",
+      "output": "bỏ tích đặt phòng"
+    },
+    {
+      "input": "bỏ tick đặt phòng",
+      "output": "bỏ tích đặt phòng"
+    },
+    {
+      "input": "tick off đặt phòng",
+      "output": "tích đặt phòng"
+    },
+    {
+      "input": "check off đặt phòng",
+      "output": "tích đặt phòng"
+    },
+    {
+      "input": "ở trang sub man, tick đặt phòng",
+      "output": "ở trang sub man, tích đặt phòng"
+    },
+    {
+      "input": "thêm to-do tick vào ô vào trang Họp tuần",
+      "output": "thêm to-do tick vào ô vào trang Họp tuần"
+    },
+    {
+      "input": "Ở phần Việc tuần sau, bạn thêm giúp to-do Chuẩn bị slide",
+      "output": "thêm to-do Chuẩn bị slide vào phần Việc tuần sau"
+    },
+    {
+      "input": "ở phần Môn Toán, hãy thêm giùm mình to-do Ôn chương 5",
+      "output": "thêm to-do Ôn chương 5 vào phần Môn Toán"
+    },
+    {
+      "input": "them to do lam de 2021 vo mon toan",
+      "output": "them to-do lam de 2021 vào mon toan"
     }
   ]
 }

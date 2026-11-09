@@ -18,6 +18,7 @@ from app.modules.modification_planner.services.explicit_content import (
     POSITION,
     _command,
     parse_explicit_blocks,
+    parse_kindless_items,
 )
 from app.modules.modification_planner.services.block_text import match_exact, match_partial, text_blocks
 from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
@@ -28,8 +29,9 @@ from app.shared.list_markers import strip_list_marker
 EXPLICIT_CONTENT_MODEL = "explicit-content-v1"
 # F2: "vào phần X", "sau dòng X", "under the X section", "after X" at the end of the sentence.
 PLACE_VI = re.compile(
-    r"\s(?:ngay\s+)?(?P<prep>vào trong|vào|trong|dưới|sau|ở|tại|trước)\s+"
-    r"(?P<kind>phần|mục|heading|tiêu đề|dòng|to-do|todo|đoạn văn|đoạn|block)\s+(?P<name>.+?)\s*$",
+    r"\s(?:ngay\s+)?(?P<prep>vào trong|vao trong|vào|vao|trong|dưới|duoi|sau|ở|o|tại|tai|trước|truoc)\s+"
+    r"(?P<kind>phần|phan|mục|muc|heading|tiêu đề|tieu de|dòng|dong|to-do|todo|đoạn văn|doan van|đoạn|doan|block)"
+    r"\s+(?P<name>.+?)\s*$",
     re.IGNORECASE,
 )
 PLACE_EN = re.compile(
@@ -37,8 +39,8 @@ PLACE_EN = re.compile(
     re.IGNORECASE,
 )
 PLACE_EN_AFTER = re.compile(r"\s(?P<prep>after|below)\s+(?!the\s)(?P<name>.+?)\s*$", re.IGNORECASE)
-BEFORE = {"trước", "before", "above"}
-SECTION_KINDS = {"phần", "mục", "heading", "tiêu đề", "section"}
+BEFORE = {"truoc", "before", "above"}
+SECTION_KINDS = {"phan", "muc", "heading", "tieu de", "section"}
 HEADER_LEVEL = 2  # DF3
 
 
@@ -53,7 +55,7 @@ def _block(kind: str, text: str) -> dict[str, Any]:
 # S1 (kế hoạch sửa lỗi người dùng giả lập): "vào Môn Toán", "vô môn toán",
 # "to Packing" name a section without "phần": only when the words are exactly
 # one root heading / toggle of the Page. Otherwise they stay content.
-BARE_PLACE = re.compile(r"\s(?:vào|vô|trong|to|in|into|under)\s+(?:the\s+)?(?P<name>[^,.;:!?\"“”]+?)\s*[.!]*$",
+BARE_PLACE = re.compile(r"\s(?:vào|vao|vô|trong|cho|to|in|into|under)\s+(?:the\s+)?(?P<name>[^,.;:!?\"“”]+?)\s*[.!]*$",
                         re.IGNORECASE)
 PLACE_WORDS = {"vao", "vo", "trong", "to", "in", "into", "under", "cho"}
 
@@ -119,7 +121,7 @@ def plan_explicit_content(
     if references:
         return None
     instruction = _with_bare_place(_place_named_first(instruction, context), context)
-    blocks = parse_explicit_blocks(instruction)
+    blocks = parse_explicit_blocks(instruction) or _kindless_blocks(instruction, context)
     if blocks is None or _ends_with_a_place(blocks, context):
         return None
     text, _, _page_end = _command(instruction, context.page.title)
@@ -143,6 +145,38 @@ def plan_explicit_content(
     })
 
 
+def _kindless_blocks(instruction: str, context: AiPageContext) -> list[tuple[str, str]] | None:
+    items = parse_kindless_items(instruction)
+    if items is None:
+        return None
+    text, _, _page_end = _command(instruction, context.page.title)
+    match = PLACE_VI.search(text) or PLACE_EN.search(text)
+    if match is None or fold(match.group("kind")) not in SECTION_KINDS:
+        return None
+    name = text_key(match.group("name").strip(" .,!"))
+    sections = [block for block in _sections(context) if text_key(_text_of(block)) == name]
+    if len(sections) != 1:
+        return None
+    kinds = {block.type for block in _section_items(sections[0], context)}
+    if len(kinds) != 1 or not kinds <= {"TODO", "TEXT"}:
+        return None
+    kind = kinds.pop()
+    return [(kind, item) for item in items]
+
+
+def _section_items(section: Any, context: AiPageContext) -> list[Any]:
+    if section.type == "TOGGLE":
+        return [block for block in context.blocks if block.parentBlockId == section.id]
+    roots = sorted((block for block in context.blocks if block.parentBlockId is None),
+                   key=lambda block: block.orderIndex)
+    items = []
+    for block in roots[roots.index(section) + 1:]:
+        if block.type == "HEADER":
+            break
+        items.append(block)
+    return items
+
+
 def _end_of_page(context: AiPageContext) -> tuple[str | None, str | None]:
     roots = [block for block in context.blocks if block.parentBlockId is None]
     return None, (max(roots, key=lambda block: block.orderIndex).id if roots else None)
@@ -156,10 +190,10 @@ def _text_of(block: Any) -> str | None:
 def _named_place(text: str, context: AiPageContext) -> tuple[str | None, str | None] | None:
     """(parentBlockId, afterBlockId) for a place the sentence names, or None when unsure."""
     match = PLACE_VI.search(text) or PLACE_EN.search(text) or PLACE_EN_AFTER.search(text)
-    if match is None or match.group("prep").casefold() in BEFORE:
+    if match is None or fold(match.group("prep")) in BEFORE:
         return None
     name = match.group("name").strip(" .,!")
-    kind = (match.groupdict().get("kind") or "").casefold()
+    kind = fold(match.groupdict().get("kind") or "")
     if kind in SECTION_KINDS:
         sections = [block for block in context.blocks if block.parentBlockId is None
                     and block.type in ("HEADER", "TOGGLE") and text_key(_text_of(block) or "") == text_key(name)]
@@ -168,8 +202,8 @@ def _named_place(text: str, context: AiPageContext) -> tuple[str | None, str | N
         if sections:
             # "dưới heading X" / "under the X heading": right below that heading;
             # "vào phần X" / "under the X section": at the end of the section.
-            prep = match.group("prep").casefold()
-            if sections[0].type == "HEADER" and prep in {"dưới", "under", "below"} and kind in {"heading", "tiêu đề"}:
+            prep = fold(match.group("prep"))
+            if sections[0].type == "HEADER" and prep in {"duoi", "under", "below"} and kind in {"heading", "tieu de"}:
                 return None, sections[0].id
             return _inside(sections[0], context)
     # A line ("sau dòng X"), or a section name that is a line of text ("sau phần ghi chú").

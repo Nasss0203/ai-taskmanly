@@ -541,3 +541,31 @@ def test_grounds_block_text_edits_the_model_left_unclear(source, instruction):
     actual = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
     assert actual.result.model_dump() == result(page_reference="sub man", instruction=instruction)
 
+
+
+@pytest.mark.parametrize(("source", "instruction"), [
+    ("them to-do on chuong 4 vao phan mon toan o trang Thử L5", "them to-do on chuong 4 vao phan mon toan"),
+    ("them to-do on chuong 4 vao phan mon toan ở trang Thử L5", "them to-do on chuong 4 vao phan mon toan"),
+    ("them doan van hop luc 9h vao trang Thử L5", "them doan van hop luc 9h"),
+    ("sua on chuong 1 thanh on chuong 9 o trang Thử L5", "sua on chuong 1 thanh on chuong 9"),
+    ("xoa on chuong 1 tren trang Thử L5", "xoa on chuong 1"),
+])
+def test_grounds_unaccented_edits_the_model_left_unclear(source, instruction):
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)])
+    actual = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert actual.result.model_dump() == result(page_reference="Thử L5", instruction=instruction)
+
+
+def test_grounds_an_unaccented_edit_of_the_open_page():
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)])
+    actual = asyncio.run(PageIntentService(provider).process(
+        PageIntentRequest(instruction="them to-do on chuong 4 vao phan mon toan", currentPageId="page-1")))
+    assert actual.result.intent == "MODIFY_PAGE"
+    assert actual.result.referenceType == "CURRENT_PAGE"
+
+
+@pytest.mark.parametrize("source", ["xem trang Thử L5", "mo trang Thử L5", "tao trang Thử L5"])
+def test_unaccented_requests_without_an_edit_are_not_edits(source):
+    provider = FakeLLMProvider([json.dumps(UNCLEAR, ensure_ascii=False)] * 2)
+    actual = asyncio.run(PageIntentService(provider).process(PageIntentRequest(instruction=source)))
+    assert actual.result.intent != "MODIFY_PAGE"

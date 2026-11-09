@@ -94,6 +94,52 @@ def test_a_named_place_is_resolved_by_rule(instruction, page, place) -> None:
     assert (operation.parentBlockId, operation.afterBlockId) == place
 
 
+@pytest.mark.parametrize(("instruction", "page", "expected", "place"), [
+    ("them to-do on chuong 4 vao phan mon toan", "study", [("TODO", "On chuong 4")], (None, "s2")),
+    ("them to do lam de 2021 vo mon toan", "study", [("TODO", "Lam de 2021")], (None, "s2")),
+    ("thêm to-do giải đề thầy Minh cho môn Lý", "study", [("TODO", "Giải đề thầy Minh")], (None, "s5")),
+    ("Ở phần Việc tuần sau, bạn thêm giúp to-do Chuẩn bị slide", "sub_man",
+     [("TODO", "Chuẩn bị slide")], (None, "t8")),
+    ("add Toothbrush and Sunscreen to Packing", "trip",
+     [("TODO", "Toothbrush"), ("TODO", "Sunscreen")], (None, "e2")),
+    ("thêm Giấy tờ tuỳ thân vào phần packing", "trip", [("TODO", "Giấy tờ tuỳ thân")], (None, "e2")),
+    ("them doan van hop luc 9h sang thu 2 vao cuoi trang", "meeting", [("TEXT", "Hop luc 9h sang thu 2")], (None, "b5")),
+    ("them to-do doc sach cho tai lieu tham khao", "study", [("TODO", "Doc sach")], ("s5", "s6")),
+])
+def test_a_section_named_in_everyday_words_is_resolved_by_rule(instruction, page, expected, place) -> None:
+    provider = FakeLLMProvider([])
+    request = ModificationPlannerRequest(instruction=instruction, context=CONTEXTS[page])
+    response = asyncio.run(ModificationPlannerService(provider).process(request))
+    assert provider.calls == []
+    assert response.model == EXPLICIT_CONTENT_MODEL
+    assert blocks(response.result) == expected
+    operation = response.result.operations[0]
+    assert (operation.parentBlockId, operation.afterBlockId) == place
+
+
+@pytest.mark.parametrize(("instruction", "page", "expected"), [
+    ("thêm to-do gửi quà cho mẹ", "study", [("TODO", "Gửi quà cho mẹ")]),
+    ("thêm to-do vo gạo", "study", [("TODO", "Vo gạo")]),
+])
+def test_place_words_inside_the_content_stay_content(instruction, page, expected) -> None:
+    provider = FakeLLMProvider([])
+    request = ModificationPlannerRequest(instruction=instruction, context=CONTEXTS[page])
+    response = asyncio.run(ModificationPlannerService(provider).process(request))
+    assert response.model == EXPLICIT_CONTENT_MODEL
+    assert blocks(response.result) == expected
+    roots = [block for block in context(page).blocks if block.parentBlockId is None]
+    assert response.result.operations[0].afterBlockId == roots[-1].id
+
+
+@pytest.mark.parametrize(("instruction", "page"), [
+    ("thêm luyện nghe và nói vào Môn Toán", "study"),
+    ("thêm Ôn tập vào phần Môn Lý", "study"),
+    ("add Toothbrush to the Packing list", "trip"),
+])
+def test_content_without_a_kind_is_left_to_the_model_when_unsure(instruction, page) -> None:
+    assert plan_explicit_content(instruction, context(page), None) is None
+
+
 @pytest.mark.parametrize(("instruction", "page"), [
     ("thêm to-do A trước phần Môn Lý", "study"),               # "before": not resolved by rule
     ("thêm to-do A sau dòng gửi", "meeting"),                  # no single line matches

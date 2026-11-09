@@ -10,7 +10,7 @@ both are checked against the shared ``evaluation/normalization_cases.json``.
 import re
 from collections.abc import Callable
 
-from app.modules.modification_planner.services.sentence_text import Folded
+from app.modules.modification_planner.services.sentence_text import Folded, command_text
 
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 
@@ -49,11 +49,12 @@ CREATE_PAGE = re.compile(r"^(?:tao|lam)(?: (?:giup|gium|cho))?(?: (?:minh|toi|em
 CREATE_START = re.compile(r"^(?:tao|create|make)(?: (?:mot|a|an|new))? (?:trang|page)\b")
 # "xoá giúp mình …", "sửa giúp tôi …": the help words after the verb.
 HELP_AFTER_VERB = re.compile(rf"^({VERB}) (?:giup|gium)(?: (?:minh|toi))?(?= |:|,)")
+TICK_WORD = re.compile(r"(?:^|(?<=, ))(?:(?P<untick>untick|bo tick)|tick off|check off|tick)(?= )")
 # "xoá cái A đi": "cái" names nothing.
 THING_AFTER_VERB = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) cai ")
 TO_DO = re.compile(r"\bto do\b")
 ARROW = re.compile(r"\s*(?:->|→|=>)\s*")
-VO = re.compile(r"\bvô\b", re.IGNORECASE)
+VO = re.compile(r"\bvô\b|(?<!to-do )(?<!todo )(?<!viec )(?<!việc )(?<!them )(?<!thêm )\bvo\b(?= )", re.IGNORECASE)
 COUNT = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) (?P<count>\d+) (?:viec|dong|to-do|todo|muc|cai|block|items?|tasks?) ")
 WITH = re.compile(r" voi ")
 EN_ITEM = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) the (?P<name>.+?) (?:item|task|to-do|todo)$")
@@ -124,6 +125,7 @@ def normalize_instruction(instruction: str) -> str:
         if not INSERTS.match(Folded(text).value):
             text = _sub(text, LOOSE_TAIL, lambda m, f: "")
     text = _sub(text, WANT, lambda m, f: "")
+    text = _sub(text, TICK_WORD, lambda m, f: "bỏ tích" if m.group("untick") else "tích")
     text = _sub(text, GIVE_ME, lambda m, f: "thêm ")
     # Only "làm …" or help words change; a plain "Tạo trang" keeps its own words.
     text = _sub(text, CREATE_PAGE, lambda m, f: "tạo " if m.group(0) != "tao " else f.original(*m.span()))
@@ -148,6 +150,7 @@ def normalize_instruction(instruction: str) -> str:
     text = _sub(text, PLACE_FIRST, lambda m, f: " ".join(filter(None, (
         _group(m, f, "rest"), "vào phần", _group(m, f, "name"),
         _group(m, f, "page") if m.group("page") else ""))))
+    text = _sub(text, HELP_AFTER_VERB, lambda m, f: _group(m, f, 1))
     text = _sub(text, UNTICK_AFTER, lambda m, f: f"bỏ tích {_group(m, f, 'name')}")
     text = _sub(text, WRITE_INTO, lambda m, f: f'thêm đoạn văn "{_group(m, f, "text")}" vào {_group(m, f, "place")}')
     text = _sub(text, NOTE, lambda m, f: f'thêm ghi chú "{_group(m, f, "text")}"')
@@ -191,7 +194,8 @@ def normalize_edit_instruction(instruction: str) -> str:
     """
     normalized = normalize_instruction(instruction)
     folded = Folded(normalized).value
-    return normalized if EDIT_START.match(folded) or CREATE_START.match(folded) else instruction
+    command = Folded(command_text(normalized)).value
+    return normalized if EDIT_START.match(folded) or EDIT_START.match(command) or CREATE_START.match(folded) else instruction
 
 
 def normalize_create_instruction(instruction: str) -> str:

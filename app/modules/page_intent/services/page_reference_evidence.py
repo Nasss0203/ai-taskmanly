@@ -36,7 +36,7 @@ DESCRIPTIVE_REFERENCE = re.compile(
 )
 EXPLICIT_NAME = re.compile(r"^(?:(?:có\s+)?tên|named|called)\s+", re.IGNORECASE)
 EDIT_PREPOSITION = re.compile(
-    r"^(?P<edit>.+?)\s+(?:vào|trong|ở|trên|tại|cho|to|in|on)\s*$",
+    r"^(?P<edit>.+?)\s+(?:vào|vao|trong|ở|o|trên|tren|tại|tai|cho|to|in|on)\s*$",
     re.IGNORECASE | re.DOTALL,
 )
 EDIT_VERB = re.compile(
@@ -44,6 +44,7 @@ EDIT_VERB = re.compile(
     r"please|can you|could you|would you|i want to|i need you to)\s+)*"
     r"(?:thêm|chèn|sửa|chỉnh|chỉnh sửa|cập nhật|đổi|xóa|xoá|"
     r"bổ sung|ghi|viết lại|viết|rút gọn|dịch|chép|thay thế|di chuyển|sắp xếp|định dạng|"
+    r"them|chen|sua|chinh sua|chinh|cap nhat|doi|xoa|bo sung|viet lai|viet|rut gon|dich|"
     r"add|insert|edit|update|remove|delete|modify|change|replace|rename|"
     r"append|prepend|move|reorder|format|rewrite|shorten|translate|copy)\b",
     re.IGNORECASE,
