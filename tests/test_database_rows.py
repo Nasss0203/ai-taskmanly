@@ -27,8 +27,21 @@ def test_named_rows_are_added_by_rule(instruction, page, expected) -> None:
     assert rows(instruction, page) == expected
 
 
+@pytest.mark.parametrize(("instruction", "expected"), [
+    ("thêm sách Tuổi trẻ đáng giá bao nhiêu đang đọc vào bảng Sách",
+     [{"q-name": "Tuổi trẻ đáng giá bao nhiêu", "q-state": "o-reading"}]),
+    ("thêm sách Nhà giả kim đã đọc vào bảng Sách", [{"q-name": "Nhà giả kim", "q-state": "o-read"}]),
+    ("them sach tuoi tre dang gia bao nhieu dang doc vao bang Sach",
+     [{"q-name": "Tuoi tre dang gia bao nhieu", "q-state": "o-reading"}]),
+])
+def test_a_title_ending_in_a_status_gives_the_status(instruction, expected) -> None:
+    assert rows(instruction, "reading") == expected
+
+
 @pytest.mark.parametrize(("instruction", "page"), [
-    ("thêm sách Tuổi trẻ đáng giá bao nhiêu đang đọc vào bảng Sách", "reading"),  # status or title?
+    ("thêm task Mark as done vào bảng Tasks", "release"),
+    ("thêm sách Đang đọc vào bảng Sách", "reading"),
+    ("thêm sách Sapiens, Tuổi trẻ đáng giá bao nhiêu đang đọc vào bảng Sách", "reading"),
     ("thêm task A với trạng thái Xong vào bảng Tasks", "release"),               # no such option
     ("thêm task A vào bảng Chi tiêu", "release"),                                  # no such table
     ("thêm 3 dòng vào bảng Tasks: A, B", "release"),                               # count differs

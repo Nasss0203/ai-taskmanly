@@ -204,3 +204,20 @@ def test_page_intent_grounds_deletes_the_model_left_unclear(source, instruction)
         "intent": "MODIFY_PAGE", "referenceType": "TITLE", "pageReference": "sub man",
         "instruction": instruction, "needsClarification": False,
     }
+
+
+@pytest.mark.parametrize(("instruction", "operations"), [
+    ("Cho tôi xoá dòng Tạo bản ghi kiểm tra với Gửi thông báo cho đội",
+     [("DELETE_BLOCK", "t3", None), ("DELETE_BLOCK", "t4", None)]),
+    ("ôn chương 3 xong r", [("SET_TODO_CHECKED", "s2", True)]),
+    ("gửi email chưa xong bỏ tích giùm", [("SET_TODO_CHECKED", "t8", False)]),
+])
+def test_everyday_requests_are_planned_by_rule(instruction, operations) -> None:
+    from scripts.evaluate_generation import CONTEXTS
+
+    page = "study" if "chương" in instruction else "sub_man"
+    provider = FakeLLMProvider([])
+    response = asyncio.run(ModificationPlannerService(provider).process(
+        ModificationPlannerRequest(instruction=instruction, context=CONTEXTS[page])))
+    assert provider.calls == []
+    assert [(op.type, op.blockId, getattr(op, "checked", None)) for op in response.result.operations] == operations

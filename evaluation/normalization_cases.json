@@ -152,6 +152,22 @@
     {
       "input": "them to do lam de 2021 vo mon toan",
       "output": "them to-do lam de 2021 vào mon toan"
+    },
+    {
+      "input": "ôn chương 3 xong r",
+      "output": "ôn chương 3 xong rồi"
+    },
+    {
+      "input": "Cho tôi xoá dòng Tạo bản ghi kiểm tra với Gửi thông báo cho đội",
+      "output": "xoá dòng Tạo bản ghi kiểm tra và Gửi thông báo cho đội"
+    },
+    {
+      "input": "Cho mình tích ôn chương 3",
+      "output": "tích ôn chương 3"
+    },
+    {
+      "input": "thêm to-do họp nhóm r&d",
+      "output": "thêm to-do họp nhóm r&d"
     }
   ]
 }

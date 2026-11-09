@@ -85,14 +85,21 @@ def plan_database_rows(instruction: str, context: AiPageContext) -> AiModificati
         return None
     selects = [prop for prop in database.properties if prop.type == "SELECT"]
     options = [(prop, option) for prop in selects for option in prop.options]
-    # "Tuổi trẻ đáng giá bao nhiêu đang đọc": the last words may be a status.
-    for name in names:
-        key = text_key(name)
-        if any(key == text_key(option.name) or key.endswith(" " + text_key(option.name)) for _, option in options):
-            return None
-
     status = _group(match, folded, "status1") if "status1" in match.groupdict() else None
     status = status or (_group(match, folded, "status2") if "status2" in match.groupdict() else None)
+    # "Tuổi trẻ đáng giá bao nhiêu đang đọc": the last words may be a status.
+    for index, name in enumerate(names):
+        key = text_key(name)
+        ending = [option for _, option in options
+                  if key == text_key(option.name) or key.endswith(" " + text_key(option.name))]
+        if not ending:
+            continue
+        size = len(text_key(ending[0].name).split())
+        if status or len(names) != 1 or len(ending) != 1 or size < 2 or len(name.split()) <= size:
+            return None
+        names[index] = " ".join(name.split()[:-size])
+        status = ending[0].name
+
     extra: dict[str, Any] = {}
     if status:
         found = [(prop, option) for prop, option in options if text_key(option.name) == text_key(status)]

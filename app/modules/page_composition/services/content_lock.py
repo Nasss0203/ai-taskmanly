@@ -54,6 +54,9 @@ DESCRIBED = re.compile(
 TASK_HEAD = re.compile(r"checklist|check list|to-?do|việc|nhiệm vụ|task|kế hoạch|plan", re.IGNORECASE)
 SECTION_HEAD = re.compile(r"(?:mục|phần|heading|tiêu đề|sections?|headings?)\s*$", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
+TASK_LIST = re.compile(
+    r"^(?:(?:các|những|cac|nhung)\s+)?(?:việc|viec|to-?dos?|nhiệm vụ|nhiem vu|tasks?)\s*:\s*", re.IGNORECASE,
+)
 
 
 def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | None:
@@ -65,9 +68,17 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
     head, body = hidden[:marker.start()].strip(), hidden[marker.end():].strip()
     title_match = PLACEHOLDER.fullmatch(head)
     title = quoted[int(title_match.group(1))][1:-1].strip() if title_match else None
+    if "," not in body and not PLACEHOLDER.search(body) and AI_DIRECTIVE.search(Folded(body).value):
+        return title, [("TODO", _show(body, quoted))]
     # A single unquoted phrase ("gồm danh sách việc cần làm") asks the model to write.
     if "," not in body and not PLACEHOLDER.search(body):
         return None
+    listed = TASK_LIST.match(body)
+    if listed:
+        items = _list_items(body[listed.end():])
+        if not items or any(":" in item for item in items):
+            return None
+        return title, [("TODO", _show(item, quoted)) for item in items]
     counted = COUNTED_SECTIONS.match(body)
     if counted:
         items = _list_items(body[counted.end():])
