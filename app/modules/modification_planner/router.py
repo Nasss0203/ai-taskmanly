@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.api.dependencies import get_modification_planner_service
 from app.modules.modification_planner.schemas.modification_planner_schema import (
     ModificationPlannerRequest,
@@ -27,4 +28,7 @@ async def generate_modification_plan(
         Depends(get_modification_planner_service),
     ],
 ) -> ModificationPlannerResponse:
-    return await service.process(request)
+    try:
+        return await service.process(request)
+    except InvalidLLMResponseError as exc:
+        raise DraftNotDoneError() from exc

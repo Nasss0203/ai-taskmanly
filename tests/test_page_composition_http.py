@@ -135,7 +135,7 @@ def test_page_composition_returns_usage(
     }
 
 
-def test_page_composition_invalid_llm_output_returns_502(
+def test_page_composition_invalid_llm_output_asks_to_rephrase(
     client: TestClient,
 ) -> None:
     provider = FakeLLMProvider(
@@ -158,11 +158,29 @@ def test_page_composition_invalid_llm_output_returns_502(
         },
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 422
 
     assert response.json() == {
-        "detail": "AI provider returned an invalid response.",
+        "detail": "DRAFT_NOT_DONE",
     }
+
+
+def test_page_composition_provider_failure_still_returns_502(
+    client: TestClient,
+) -> None:
+    from app.core.exceptions import LLMProviderError
+
+    class FailingProvider(FakeLLMProvider):
+        async def generate(self, *args, **kwargs):
+            raise LLMProviderError("Ollama rejected the request.")
+
+    client.app.state.page_composition_service = PageCompositionService(FailingProvider([]))
+    response = client.post(
+        "/internal/v1/page-composition",
+        headers={"X-Internal-Service-Token": TEST_TOKEN},
+        json={"instruction": "Tạo trang project planning."},
+    )
+    assert response.status_code == 502
 
 
 def test_page_composition_rejects_empty_instruction(

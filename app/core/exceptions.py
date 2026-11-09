@@ -31,6 +31,10 @@ class InvalidLLMResponseError(LLMProviderError):
     pass
 
 
+class DraftNotDoneError(Exception):
+    pass
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(LLMTimeoutError)
     async def handle_llm_timeout(
@@ -63,6 +67,17 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=422,
             content={"detail": "WRITING_NOT_DONE", "problem": exc.problem},
+        )
+
+    @app.exception_handler(DraftNotDoneError)
+    async def handle_draft_not_done(
+        request: Request,
+        exc: DraftNotDoneError,
+    ) -> JSONResponse:
+        logger.warning("draft_not_done path=%s", request.url.path)
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "DRAFT_NOT_DONE"},
         )
 
     @app.exception_handler(InvalidLLMResponseError)

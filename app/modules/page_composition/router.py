@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.api.dependencies import get_page_composition_service
 from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionRequest,
@@ -25,4 +26,7 @@ async def generate_page_composition(
         Depends(get_page_composition_service),
     ],
 ) -> PageCompositionResponse:
-    return await service.process(request)
+    try:
+        return await service.process(request)
+    except InvalidLLMResponseError as exc:
+        raise DraftNotDoneError() from exc

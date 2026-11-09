@@ -340,7 +340,7 @@ def test_modification_planner_rejects_missing_context(
     assert response.status_code == 422
 
 
-def test_modification_planner_invalid_llm_output_returns_502(
+def test_modification_planner_invalid_llm_output_asks_to_rephrase(
     client: TestClient,
 ) -> None:
     provider = FakeLLMProvider(
@@ -363,10 +363,10 @@ def test_modification_planner_invalid_llm_output_returns_502(
         json=make_request_payload(),
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 422
 
     assert response.json() == {
-        "detail": "AI provider returned an invalid response.",
+        "detail": "DRAFT_NOT_DONE",
     }
 
     assert len(provider.calls) == 1
@@ -391,9 +391,9 @@ def test_modification_planner_validation_error_has_safe_http_logs(
             json=payload,
         )
 
-    assert response.status_code == 502
+    assert response.status_code == 422
     assert response.json() == {
-        "detail": "AI provider returned an invalid response.",
+        "detail": "DRAFT_NOT_DONE",
     }
     assert len(provider.calls) == 1
     for sensitive in (private, payload["instruction"], payload["context"]["page"]["title"]):
