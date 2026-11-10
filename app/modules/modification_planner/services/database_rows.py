@@ -15,7 +15,13 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiModificationPlan,
     AiPageContext,
 )
-from app.modules.modification_planner.services.explicit_content import CLAUSE, INSERT, _command, _list_items
+from app.modules.modification_planner.services.explicit_content import (
+    CLAUSE,
+    INSERT,
+    _command,
+    _hide_quotes,
+    _list_items,
+)
 from app.modules.modification_planner.services.explicit_plan import plan_explicit_content
 from app.modules.modification_planner.services.sentence_text import Folded, command_text, text_key
 from app.modules.modification_planner.services.todo_status import PLAN_ADAPTER
@@ -24,7 +30,9 @@ DATABASE_ROWS_MODEL = "database-rows-v1"
 ROWS_AND_BLOCKS_MODEL = "rows-and-blocks-v1"
 
 VERB = r"(?:them|add|insert)"
-ROW_WORD = r"(?:(?:mot|a|an|new)\s+)?(?:(?:cuon(?:\s+sach)?|tasks?|dong|hang|rows?|sach|books?|items?|muc|viec|cong viec)\s+)?"
+ROW_WORD = (r"(?:(?P<qty>mot|a|an|one|new|cac|nhung)\s+)?"
+            r"(?:(?P<row>cuon(?:\s+sach)?|tasks?|dong|hang|rows?|sach|books?|items?|muc|viec|cong viec)\s+)?")
+PLURAL_QTY = {"cac", "nhung"}
 STATUS_WORD = r"(?:trang thai|tinh trang|status)"
 STATUS = rf"(?:,?\s+(?:voi\s+|with\s+)?{STATUS_WORD}\s+(?:la\s+|is\s+|:\s*)?(?P<{{name}}>[^,]+?))"
 TABLE = r"\s+(?:vao|to|into|in)\s+(?:the\s+)?(?:bang\s+|table\s+)?(?P<table>.+?)(?:\s+table)?"
@@ -41,6 +49,28 @@ LISTED = re.compile(
     rf"^{VERB}\s+(?:(?P<count>\d+)\s+)?(?:dong|hang|rows?|tasks?|sach|books?)\s+(?:vao|to|into)\s+(?:the\s+)?"
     rf"(?:bang\s+)?(?P<table>[^:]+?)(?:\s+table)?\s*:\s*(?P<names>.+)$"
 )
+
+
+def _one_row(match: re.Match[str]) -> bool:
+    groups = match.groupdict()
+    row, qty = groups.get("row"), groups.get("qty")
+    return bool(row) and not groups.get("count") and qty not in PLURAL_QTY and not row.endswith("s")
+
+
+def _names(text: str, one_row: bool) -> tuple[list[str], set[int]] | None:
+    hidden, quoted = _hide_quotes(text)
+    pieces = [hidden.strip(" .")] if one_row and not re.search(r"[,;]", hidden) else _list_items(hidden)
+    if pieces is None:
+        return None
+    names, exact = [], set()
+    for piece in pieces:
+        whole = re.fullmatch(r"\s*\x00(\d+)\x00\s*", piece)
+        if whole:
+            exact.add(len(names))
+            names.append(quoted[int(whole.group(1))][1:-1].strip())
+            continue
+        names.append(re.sub(r"\x00(\d+)\x00", lambda found: quoted[int(found.group(1))], piece).strip(QUOTE_CHARS + " "))
+    return names, exact
 
 
 def _group(match: re.Match[str], folded: Folded, name: str) -> str | None:
@@ -79,8 +109,11 @@ def plan_database_rows(instruction: str, context: AiPageContext) -> AiModificati
     if len(titles) != 1:
         return None
 
-    names = [name.strip(QUOTE_CHARS + " ") for name in _list_items(_group(match, folded, "names") or "") or []]
-    if any(re.search(rf"\b{STATUS_WORD}\b", text_key(name)) for name in names):
+    read = _names(_group(match, folded, "names") or "", _one_row(match))
+    if read is None:
+        return None
+    names, exact = read
+    if any(re.search(rf"\b{STATUS_WORD}\b", text_key(name)) for index, name in enumerate(names) if index not in exact):
         return None
     count = match.group("count")
     if not names or (count and int(count) != len(names)) or any(":" in name for name in names):
@@ -91,6 +124,8 @@ def plan_database_rows(instruction: str, context: AiPageContext) -> AiModificati
     status = status or (_group(match, folded, "status2") if "status2" in match.groupdict() else None)
     # "Tuổi trẻ đáng giá bao nhiêu đang đọc": the last words may be a status.
     for index, name in enumerate(names):
+        if index in exact:
+            continue
         key = text_key(name)
         ending = [option for _, option in options
                   if key == text_key(option.name) or key.endswith(" " + text_key(option.name))]
@@ -125,7 +160,6 @@ def _unhide(text: str, quoted: list[str]) -> str:
 
 
 def plan_rows_and_blocks(instruction: str, context: AiPageContext) -> AiModificationPlan | None:
-    """ "thêm dòng X vào bảng Y và heading Z": the rows, then the blocks, in one plan."""
     if not context.databases:
         return None
     text, quoted, _ = _command(instruction)

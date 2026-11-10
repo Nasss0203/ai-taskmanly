@@ -78,6 +78,13 @@ def test_a_row_and_a_todo_make_one_draft() -> None:
     assert blocks(response.result) == [("TODO", "Call the client")]
 
 
+def test_a_quoted_row_and_a_heading_make_one_draft() -> None:  # D-22
+    response, calls = answer('thêm dòng "A và B" vào bảng Tasks và heading Tổng kết', "release")
+    assert calls == [] and response.model == ROWS_AND_BLOCKS_MODEL
+    assert [r.values for r in response.result.operations[0].rows] == [{"p-name": "A và B"}]
+    assert blocks(response.result) == [("HEADER", "Tổng kết")]
+
+
 def test_a_missing_table_is_no_mixed_draft() -> None:
     response, _ = answer("thêm dòng A dài vào bảng Không có và heading B", "release")
     assert response is None or response.model != ROWS_AND_BLOCKS_MODEL
