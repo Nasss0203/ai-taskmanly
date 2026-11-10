@@ -77,6 +77,11 @@ UNSURE_TOPIC = re.compile(
 )
 # Database rows go through their own route; a table target is never locked here.
 TABLE = re.compile(r"\b(?:bảng|table|database|cơ sở dữ liệu)\b", re.IGNORECASE)
+TASK_LIST = re.compile(
+    r"^(?:these|the following)\s+tasks(?=(?:\s+for\s+[^:]+)?\s*:)"
+    r"|^(?:các|cac|những|nhung)\s+(?:công việc|cong viec|việc|viec)\s+sau(?:\s+(?:đây|day))?(?=\s*:)",
+    re.IGNORECASE,
+)
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 STRIP = " .,!;:"
 
@@ -188,7 +193,7 @@ def parse_explicit_blocks(instruction: str) -> list[tuple[str, str]] | None:
     verb = INSERT.match(text)
     if verb is None:
         return None
-    body = text[verb.end():]
+    body = TASK_LIST.sub("to-do list", text[verb.end():], count=1)
     if TABLE.search(body):
         return None
     blocks: list[tuple[str, str]] = []

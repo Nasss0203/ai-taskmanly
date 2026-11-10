@@ -15,11 +15,13 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiModificationPlan,
     AiPageContext,
 )
-from app.modules.modification_planner.services.explicit_content import _list_items
+from app.modules.modification_planner.services.explicit_content import CLAUSE, INSERT, _command, _list_items
+from app.modules.modification_planner.services.explicit_plan import plan_explicit_content
 from app.modules.modification_planner.services.sentence_text import Folded, command_text, text_key
 from app.modules.modification_planner.services.todo_status import PLAN_ADAPTER
 
 DATABASE_ROWS_MODEL = "database-rows-v1"
+ROWS_AND_BLOCKS_MODEL = "rows-and-blocks-v1"
 
 VERB = r"(?:them|add|insert)"
 ROW_WORD = r"(?:(?:mot|a|an|new)\s+)?(?:(?:cuon(?:\s+sach)?|tasks?|dong|hang|rows?|sach|books?|items?|muc|viec|cong viec)\s+)?"
@@ -116,3 +118,33 @@ def plan_database_rows(instruction: str, context: AiPageContext) -> AiModificati
             "rows": [{"values": {titles[0].id: name[:1].upper() + name[1:], **extra}} for name in names],
         }],
     })
+
+
+def _unhide(text: str, quoted: list[str]) -> str:
+    return re.sub(r"\x00(\d+)\x00", lambda match: quoted[int(match.group(1))], text).strip(" ,.")
+
+
+def plan_rows_and_blocks(instruction: str, context: AiPageContext) -> AiModificationPlan | None:
+    """ "thêm dòng X vào bảng Y và heading Z": the rows, then the blocks, in one plan."""
+    if not context.databases:
+        return None
+    text, quoted, _ = _command(instruction)
+    verb = INSERT.match(text)
+    if verb is None:
+        return None
+    for split in CLAUSE.finditer(text, verb.end()):
+        if not re.match(r"\s+(?:và|va|and)\s", split.group(0), re.IGNORECASE):
+            continue
+        rows = plan_database_rows(_unhide(text[:split.start()], quoted), context)
+        if rows is None:
+            continue
+        blocks = plan_explicit_content(verb.group(0) + _unhide(text[split.end():], quoted), context, None)
+        if blocks is None:
+            return None
+        return PLAN_ADAPTER.validate_python({
+            "schemaVersion": 1, "type": "AI_MODIFICATION_PLAN", "pageId": context.page.id,
+            "status": "PLAN_READY", "summary": instruction.strip(),
+            "operations": [operation.model_dump(mode="json")
+                           for operation in (*rows.operations, *blocks.operations)],
+        })
+    return None

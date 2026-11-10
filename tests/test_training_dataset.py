@@ -63,17 +63,29 @@ def test_only_free_wording_is_typed_without_accents(examples):
             assert example["kind"] in {"references", "topic_checklist", "missing_section"}
 
 
+def test_a_row_and_a_heading_are_answered_by_rules():
+    from scripts.evaluate_generation import CONTEXTS
+
+    request = ModificationPlannerRequest(
+        instruction="thêm dòng Viết release note vào bảng Tasks và heading Tổng kết", context=CONTEXTS["release"])
+    assert answered_by_rules(request)
+
+
 def _route(operation="INSERT_BLOCKS"):
     return json.dumps({"status": "PLAN_READY", "operationTypes": [operation]})
 
 
 def _checklist_example():
-    # A checklist without a place is drafted by rule now (kế hoạch bỏ qua model,
-    # F1): the model still places one under a named section.
+    # Spelled-out checklists are drafted by rule now (2026-11-09/06): the model
+    # still writes a checklist from a source Page's passages.
     for example in generate(80, seed=11):
-        if example["kind"] == "checklist" and example["expect"].get("after_block"):
+        if example["kind"] == "references" and example["expect"].get("after_block"):
             return example
     raise AssertionError("no placed checklist example")
+
+
+def _items(example):
+    return example["expect"]["todos_from"]
 
 
 def _after(example):
@@ -90,7 +102,7 @@ def _insert(items, after=None):
 
 def test_teacher_keeps_a_right_plan_as_two_chats():
     example = _checklist_example()
-    provider = FakeLLMProvider([_route(), _insert(example["expect"]["todo_texts"], _after(example))])
+    provider = FakeLLMProvider([_route(), _insert(_items(example), _after(example))])
     result = asyncio.run(answer(example, provider))
     assert result["kept"], result
     assert [len(chat["messages"]) for chat in result["chats"]] == [3, 3]
@@ -103,9 +115,9 @@ def test_teacher_keeps_a_right_plan_as_two_chats():
 
 def test_teacher_drops_a_valid_but_wrong_plan():
     example = _checklist_example()
-    wrong = example["expect"]["todo_texts"][:-1] + ["Một việc tự nghĩ ra"]
+    wrong = _items(example)[:-1] + ["Một việc tự nghĩ ra"]
     result = asyncio.run(answer(example, FakeLLMProvider([_route(), _insert(wrong, _after(example))])))
-    assert not result["kept"] and "todo_texts" in result["reason"]
+    assert not result["kept"] and "todos_from" in result["reason"]
 
 
 def test_teacher_drops_invalid_json():
@@ -128,7 +140,7 @@ def test_run_carries_on_after_an_interruption(tmp_path):
     requests.write_text("\n".join(json.dumps({**example, "id": f"t{i}"}, ensure_ascii=False) for i in (1, 2)),
                         encoding="utf-8")
     output = tmp_path / "sft.jsonl"
-    items = example["expect"]["todo_texts"]
+    items = _items(example)
     after = _after(example)
     first = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items, after)]), limit=1))
     second = asyncio.run(run(requests, output, FakeLLMProvider([_route(), _insert(items, after)]), limit=None))

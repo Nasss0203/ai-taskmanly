@@ -40,7 +40,12 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
 )
 from app.shared.json_parser import parse_json_object
 from app.modules.modification_planner.services.block_delete import plan_block_delete
-from app.modules.modification_planner.services.database_rows import DATABASE_ROWS_MODEL, plan_database_rows
+from app.modules.modification_planner.services.database_rows import (
+    DATABASE_ROWS_MODEL,
+    ROWS_AND_BLOCKS_MODEL,
+    plan_database_rows,
+    plan_rows_and_blocks,
+)
 from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
 from app.modules.modification_planner.services.context_window import window_context
 from app.modules.modification_planner.services.explicit_plan import EXPLICIT_CONTENT_MODEL, plan_explicit_content
@@ -154,6 +159,7 @@ class ModificationPlannerService:
             (plan_missing_target, MISSING_TARGET_MODEL),
             # Kế hoạch sửa lỗi tạo trang và bảng (P6): rows of a named table.
             (plan_database_rows, DATABASE_ROWS_MODEL),
+            (plan_rows_and_blocks, ROWS_AND_BLOCKS_MODEL),
         ):
             rule_plan = plan_by_rules(request.instruction, request.context)
             if rule_plan is not None:
