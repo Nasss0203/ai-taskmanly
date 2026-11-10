@@ -168,6 +168,30 @@
     {
       "input": "thêm to-do họp nhóm r&d",
       "output": "thêm to-do họp nhóm r&d"
+    },
+    {
+      "input": "thêm một heading Ghi chú thêm ở cuối trang sub man với",
+      "output": "thêm một heading Ghi chú thêm ở cuối trang sub man"
+    },
+    {
+      "input": "thêm to-do Gọi khách vào trang sub man với",
+      "output": "thêm to-do Gọi khách vào trang sub man"
+    },
+    {
+      "input": "thêm dòng Viết test vào bảng Tasks đi",
+      "output": "thêm dòng Viết test vào bảng Tasks"
+    },
+    {
+      "input": "thêm to-do mua đồ ăn mang đi",
+      "output": "thêm to-do mua đồ ăn mang đi"
+    },
+    {
+      "input": "thêm to-do đi ăn trưa với",
+      "output": "thêm to-do đi ăn trưa với"
+    },
+    {
+      "input": "thêm to-do cập nhật trang chủ đi",
+      "output": "thêm to-do cập nhật trang chủ đi"
     }
   ]
 }

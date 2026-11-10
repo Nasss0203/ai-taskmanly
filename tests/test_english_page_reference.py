@@ -57,7 +57,6 @@ def test_this_page_in_front_is_the_open_page() -> None:
 
 @pytest.mark.parametrize("instruction", [
     "add a heading Notes to the end of the page",
-    "add a heading Notes to the bottom of the Trip page",
     "add a to-do X to the page about OAuth",
     "On the page I edited yesterday, add a to-do X",
     "On the A page and the B page, add a to-do X",

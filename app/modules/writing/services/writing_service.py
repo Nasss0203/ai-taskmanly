@@ -7,11 +7,12 @@ from app.llm.base import LLMProvider
 from app.modules.writing.prompts import build_writing_prompt
 from app.modules.writing.schemas import WritingAction, WritingRequest, WritingResponse
 from app.modules.writing.schemas.writing_schema import WritingUsage
-from app.modules.writing.services.writing_check import PROBLEMS, writing_problem
+from app.modules.writing.services.writing_check import PROBLEMS, demanded_words, directives, writing_problem
 
 
 logger = logging.getLogger(__name__)
 
+DIRECTIVE_FREE = (WritingAction.SUMMARIZE, WritingAction.SHORTEN, WritingAction.CONTINUE, WritingAction.EXPAND)
 DAY_HINT = re.compile(r"\s*[(（](?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[)）]")
 
 
@@ -26,6 +27,7 @@ class WritingService:
 
     async def _generate_checked(
         self, provider: LLMProvider, request: WritingRequest, system_prompt: str, user_prompt: str,
+        demanded: set[str] = frozenset(),
     ):
         """Kế hoạch sửa tính năng viết (V4, DV3): a result failing the rule checks is
         generated once more with the reason; a second failure is reported."""
@@ -43,7 +45,7 @@ class WritingService:
                 result = result[len(request.text):]
             if not result.strip():
                 raise InvalidLLMResponseError("Writing result is empty.")
-            problem = writing_problem(request.action, request.text, result.strip(), request.language)
+            problem = writing_problem(request.action, request.text, result.strip(), request.language, demanded)
             if problem is None:
                 return generation, result
             logger.warning("writing_check_failed operation=%s problem=%s attempt=%d",
@@ -58,6 +60,13 @@ class WritingService:
             and self.continue_llm_provider is not None
             else self.llm_provider
         )
+        cleaned, dropped = directives(request.text)
+        demanded = demanded_words(dropped)
+        if dropped and request.action in DIRECTIVE_FREE:
+            logger.warning("writing_directive_removed operation=%s count=%d", request.action.value, len(dropped))
+            if not cleaned:
+                raise WritingNotDoneError("followed_instruction")
+            request = request.model_copy(update={"text": cleaned})
         system_prompt, user_prompt = build_writing_prompt(
             action=request.action,
             text=request.text,
@@ -71,7 +80,7 @@ class WritingService:
             provider.model_name,
         )
         try:
-            generation, result = await self._generate_checked(provider, request, system_prompt, user_prompt)
+            generation, result = await self._generate_checked(provider, request, system_prompt, user_prompt, demanded)
         except Exception as exc:
             logger.warning(
                 "writing_failed operation=%s provider=%s model=%s "

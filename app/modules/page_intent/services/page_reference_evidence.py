@@ -49,27 +49,30 @@ EDIT_VERB = re.compile(
     r"append|prepend|move|reorder|format|rewrite|shorten|translate|copy)\b",
     re.IGNORECASE,
 )
+PAGE_EDIT_VERB = (
+    r"(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|bổ sung|viết|"
+    r"bỏ tích|bỏ đánh dấu|bỏ (?:việc|to-do|todo|dòng|mục)|tích|đánh dấu|hoàn thành|làm xong|gỡ bỏ|gỡ|thay|"
+    r"add|insert|edit|update|remove|delete|mark|check|uncheck|tick|untick|complete)"
+)
 FOLLOWING_EDIT = re.compile(
     r"^(?P<title>.+?)(?:[,;]\s*|\.\s+)(?P<edit>(?:(?:rồi|sau đó|please)\s+)?"
-    r"(?:hãy\s+)?(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|"
-    r"bổ sung|viết|add|insert|edit|update|remove|delete)\b.*)$",
+    rf"(?:hãy\s+)?{PAGE_EDIT_VERB}\b.*)$",
     re.IGNORECASE | re.DOTALL,
 )
 TRAILING_QUOTED_EDIT = re.compile(
     r"^[,;:.]?\s*(?P<edit>(?:(?:rồi|sau đó|please)\s+)?"
-    r"(?:hãy\s+)?(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|"
-    r"bổ sung|viết|add|insert|edit|update|remove|delete)\b.*)$",
+    rf"(?:hãy\s+)?{PAGE_EDIT_VERB}\b.*)$",
     re.IGNORECASE | re.DOTALL,
 )
 # "Trong trang X thêm ..." with a bare X: only a locative (or nothing) may
 # precede the Page noun, and the first edit verb after the name ends it.
 LEADING_LOCATIVE = re.compile(
-    r"^(?:(?:hãy|vui lòng|please)\s+)?(?:(?:trong|ở|tại|in|on|inside)\s+)?$",
+    r"^(?:(?:hãy|vui lòng|please|giúp mình|giúp tôi|cho mình|cho tôi|nhờ bạn|bạn ơi|bạn)\s+)*"
+    r"(?:(?:trong|ở|tại|in|on|inside)\s+)?$",
     re.IGNORECASE,
 )
 INLINE_EDIT = re.compile(
-    r"^(?P<title>.+?)\s+(?P<edit>(?:hãy\s+)?(?:thêm|chèn|sửa|chỉnh|cập nhật|đổi|xóa|xoá|"
-    r"bổ sung|viết|add|insert|edit|update|remove|delete)\b.*)$",
+    rf"^(?P<title>.+?)\s+(?P<edit>(?:hãy\s+)?{PAGE_EDIT_VERB}\b.*)$",
     re.IGNORECASE | re.DOTALL,
 )
 STANDALONE_WRITING = re.compile(
@@ -94,6 +97,15 @@ ENGLISH_TRAILING_PAGE = (
         r"\s+page[.!?\s]*$",
         re.IGNORECASE | re.DOTALL,
     ),
+)
+PAGE_END_PLACE = re.compile(
+    r"^(?P<edit>.+?)\s+(?P<place>(?:(?:vào|vao|ở|o|tại|tai)\s+)?(?:cuối|cuoi|đầu|dau))\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+ENGLISH_END_OF_PAGE = re.compile(
+    r"^(?P<edit>.+?)\s+(?P<place>(?:at|to)\s+the\s+(?:end|top|bottom|start|beginning)\s+of)\s+(?:the\s+)?"
+    r"(?P<title>.+?)\s+page[.!?\s]*$",
+    re.IGNORECASE | re.DOTALL,
 )
 ENGLISH_CURRENT = re.compile(r"^(?:this|current|the current)$", re.IGNORECASE)
 ENGLISH_NOT_A_TITLE = re.compile(
@@ -171,6 +183,12 @@ def english_page_reference(source: str) -> PageReferenceEvidence | None:
             return PageReferenceEvidence("CURRENT_PAGE", None, edit)
         title = _english_title(leading.group("title"))
         return PageReferenceEvidence("TITLE", title, edit) if title else None
+    end_of_page = ENGLISH_END_OF_PAGE.match(source)
+    if end_of_page and is_edit_clause(end_of_page.group("edit").strip()):
+        title = _english_title(end_of_page.group("title"))
+        if title and not ENGLISH_CURRENT.match(title):
+            edit = f"{end_of_page.group('edit').strip()} {end_of_page.group('place')} the page"
+            return PageReferenceEvidence("TITLE", title, edit)
     for guessed, pattern in enumerate(ENGLISH_TRAILING_PAGE):
         trailing = pattern.match(source)
         if trailing is None:
@@ -189,6 +207,12 @@ def english_page_reference(source: str) -> PageReferenceEvidence | None:
 def _source_instruction(source: str, marker_start: int) -> str | None:
     """Keep the user's exact edit text if the page target is at the end."""
     before = source[:marker_start]
+    place = PAGE_END_PLACE.fullmatch(before)
+    if place and is_edit_clause(place.group("edit").strip()):
+        marker = PAGE_MARKER.match(source, marker_start)
+        where = place.group("place")
+        where = where if " " in where.strip() else f"vào {where}"
+        return f"{place.group('edit').strip()} {where} {marker.group() if marker else 'trang'}"
     match = EDIT_PREPOSITION.fullmatch(before)
     if not match:
         return None
@@ -453,6 +477,8 @@ def detect_page_reference(
             and LEADING_LOCATIVE.match(normalized[:marker.start()])
             else None
         )
+        if inline_edit and not is_edit_clause(inline_edit.group("edit").strip()):
+            inline_edit = None
         if trailing_edit:
             remainder = trailing_edit.group("title").strip()
             later_instruction = trailing_edit.group("edit").strip()

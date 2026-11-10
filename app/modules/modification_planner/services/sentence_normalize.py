@@ -43,6 +43,10 @@ TAIL = re.compile(
 # "đi", "với", "nữa", "cảm ơn" also end content ("bữa trưa mang đi", "thiệp cảm ơn"):
 # dropped only when the sentence adds nothing ("xoá cái X đi", "giúp mình với").
 LOOSE_TAIL = re.compile(r"(?:[\s,]+(?:di|voi|nua|giup|cam on))+[\s.!?]*$")
+TARGET_BEFORE_TAIL = re.compile(
+    r"\b(?:vao|o|trong|tai|tren|cua|cho|cuoi|dau)\s+(?:trang|page|bang|table)\s+[^,]+?"
+    r"(?=(?:[\s,]+(?:di|voi|nua|giup|cam on))+[\s.!?]*$)"
+)
 INSERTS = re.compile(
     r"^(?:them|chen|bo sung|ghi them|add|insert|append|cho (?:minh|toi|em)|minh can|toi can|tao|lam|create|make)\b"
 )
@@ -124,7 +128,7 @@ def normalize_instruction(instruction: str) -> str:
         tail = TAIL.search(Folded(text).value)
         if tail and "nhà" not in Folded(text).original(*tail.span()).casefold():
             text = _sub(text, TAIL, lambda m, f: "")
-        if not INSERTS.match(Folded(text).value):
+        if not INSERTS.match(Folded(text).value) or TARGET_BEFORE_TAIL.search(Folded(text).value):
             text = _sub(text, LOOSE_TAIL, lambda m, f: "")
     text = _sub(text, WANT, lambda m, f: "")
     text = _sub(text, LET_ME, lambda m, f: "")

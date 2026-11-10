@@ -21,6 +21,7 @@ ASKED_VALUE = re.compile(
     r"(?:(?:are|is|o trang thai|co trang thai|trang thai|dang o|dang|la)\s+)?(?P<value>.+?)"
     r"(?:\s+(?:trong|o|in|of|tai|cua)\b.*)?$"
 )
+POLITE_TAIL = re.compile(r"(?:\s+(?:nhe|nha|voi|di|please|gium(?: (?:minh|toi))?|giup (?:minh|toi|em)))+$")
 NOT_A_VALUE = re.compile(r"^(?:(?:trong|o|in|of|co|the|tat ca|all)\b|bang\b|table\b)")
 
 
@@ -140,7 +141,7 @@ def database_answer(
     note = (f" (AI chỉ đọc được {len(rows)}/{total} dòng; số trên chỉ tính phần đã đọc.)"
             if completeness and completeness.truncated else "")
     data: dict[str, Any] = {"databaseFound": True, "database": database.name, "rowTotal": total}
-    asked = ASKED_VALUE.search(text_key(question))
+    asked = ASKED_VALUE.search(POLITE_TAIL.sub("", text_key(question)))
     value = asked.group("value").strip() if asked else ""
     if not value or NOT_A_VALUE.match(value) or _named_in(database.name, value):
         data["rowCount"] = total
