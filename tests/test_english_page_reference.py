@@ -70,3 +70,32 @@ def test_a_place_a_description_or_two_pages_is_no_title(instruction) -> None:
 def test_a_question_about_a_page_stays_a_question() -> None:
     intent = deterministic_result(IntentRequest(instruction="On the Trip page, what is still open?"))
     assert intent is not None and intent.intent == "PAGE_QUESTION"
+
+
+@pytest.mark.parametrize(("instruction", "edit"), [  # D-28
+    ("delete the to-do Phone charger from the Trip to Hanoi page", "delete the to-do Phone charger"),
+    ("uncheck Passport from the Trip to Hanoi page", "uncheck Passport"),
+])
+def test_from_the_page_names_the_whole_title(instruction, edit) -> None:
+    evidence = detect_page_reference(instruction)
+    assert (evidence.reference_type, evidence.title, evidence.instruction) == ("TITLE", "Trip to Hanoi", edit)
+
+
+@pytest.mark.parametrize("instruction", [  # D-28
+    "delete the Trip to Hanoi page",
+    "remove the Trip to Hanoi page",
+    "add a to-do Call the client to Trip to Hanoi page",
+    "add a to-do Pack to Road to Rome page",
+])
+def test_a_title_holding_to_is_never_cut(instruction) -> None:
+    assert detect_page_reference(instruction).title not in {"Hanoi", "Rome"}
+
+
+@pytest.mark.parametrize(("instruction", "title"), [  # D-28
+    ("add a to-do Call the client on the Trip to Hanoi page", "Trip to Hanoi"),
+    ("add Deploy to staging to the Release page", "Release"),
+    ("add a QA checklist to sub man page", "sub man"),
+    ("add a heading Notes to the Road to Rome page", "Road to Rome"),
+])
+def test_titles_read_before_stay_the_same(instruction, title) -> None:
+    assert detect_page_reference(instruction).title == title

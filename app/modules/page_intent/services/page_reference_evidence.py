@@ -85,12 +85,13 @@ ENGLISH_LEADING_PAGE = re.compile(
 )
 ENGLISH_TRAILING_PAGE = (
     re.compile(
-        r"^(?P<edit>.+)\s+(?:to|on|in|into)\s+the\s+(?P<title>(?:(?!\s(?:to|on|in|into)\s+the\s).)+?)"
+        r"^(?P<edit>.+)\s+(?:to|on|in|into|from)\s+the\s+(?P<title>(?:(?!\s(?:to|on|in|into|from)\s+the\s).)+?)"
         r"\s+page[.!?\s]*$",
         re.IGNORECASE | re.DOTALL,
     ),
     re.compile(
-        r"^(?P<edit>.+)\s+(?:to|on|in|into)\s+(?P<title>(?:(?!\s(?:to|on|in|into)\s).)+?)\s+page[.!?\s]*$",
+        r"^(?P<edit>.+)\s+(?:to|on|in|into|from)\s+(?P<title>(?:(?!\s(?:to|on|in|into|from)\s).)+?)"
+        r"\s+page[.!?\s]*$",
         re.IGNORECASE | re.DOTALL,
     ),
 )
@@ -170,12 +171,15 @@ def english_page_reference(source: str) -> PageReferenceEvidence | None:
             return PageReferenceEvidence("CURRENT_PAGE", None, edit)
         title = _english_title(leading.group("title"))
         return PageReferenceEvidence("TITLE", title, edit) if title else None
-    for pattern in ENGLISH_TRAILING_PAGE:
+    for guessed, pattern in enumerate(ENGLISH_TRAILING_PAGE):
         trailing = pattern.match(source)
         if trailing is None:
             continue
         edit = trailing.group("edit").strip()
         if ENGLISH_CURRENT.match(trailing.group("title").strip()) or not is_edit_clause(edit):
+            return None
+        words = edit.casefold().split()
+        if guessed and ("the" in words[-6:] or {"to", "on", "in", "into", "from"} & set(words[-3:-1])):
             return None
         title = _english_title(trailing.group("title"))
         return PageReferenceEvidence("TITLE", title, edit) if title else None
