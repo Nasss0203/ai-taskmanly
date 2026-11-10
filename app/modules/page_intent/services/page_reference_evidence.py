@@ -79,6 +79,26 @@ STANDALONE_WRITING = re.compile(
     re.IGNORECASE,
 )
 QUOTED_TEXT = re.compile(r'''(?<!\w)(?:"[^"]*"|'[^']*'|`[^`]*`|“[^”]*”|‘[^’]*’)''')
+ENGLISH_LEADING_PAGE = re.compile(
+    r"^(?:please\s+)?(?:on|in|inside)\s+(?:the\s+)?(?P<title>.+?)\s+page(?:\s*[,:]\s*|\s+)(?P<edit>\S.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+ENGLISH_TRAILING_PAGE = (
+    re.compile(
+        r"^(?P<edit>.+)\s+(?:to|on|in|into)\s+the\s+(?P<title>(?:(?!\s(?:to|on|in|into)\s+the\s).)+?)"
+        r"\s+page[.!?\s]*$",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    re.compile(
+        r"^(?P<edit>.+)\s+(?:to|on|in|into)\s+(?P<title>(?:(?!\s(?:to|on|in|into)\s).)+?)\s+page[.!?\s]*$",
+        re.IGNORECASE | re.DOTALL,
+    ),
+)
+ENGLISH_CURRENT = re.compile(r"^(?:this|current|the current)$", re.IGNORECASE)
+ENGLISH_NOT_A_TITLE = re.compile(
+    r"^(?:the|a|an|that|same|my|your|new)$|^(?:end|top|bottom|start|beginning|middle)\b",
+    re.IGNORECASE,
+)
 
 
 def is_edit_clause(text: str) -> bool:
@@ -125,6 +145,41 @@ class PageReferenceEvidence:
     description: str | None = None
     # Only for CONTENT: words inside the Page, in the user's words (M7).
     topic: str | None = None
+
+
+def _english_title(title: str) -> str | None:
+    title = title.strip()
+    whole = QUOTED_TEXT.fullmatch(title)
+    if whole:
+        title = title[1:-1].strip()
+    elif "," in title or ";" in title or PAGE_MARKER.search(title):
+        return None
+    if (not title or ENGLISH_NOT_A_TITLE.match(title) or DESCRIPTIVE_REFERENCE.match(title)
+            or re.search(r"\s+(?:and|or)\s+the\s+", title, re.IGNORECASE)):
+        return None
+    return title
+
+
+def english_page_reference(source: str) -> PageReferenceEvidence | None:
+    leading = ENGLISH_LEADING_PAGE.match(source)
+    if leading:
+        edit = leading.group("edit").strip()
+        if not is_edit_clause(edit):
+            return None
+        if ENGLISH_CURRENT.match(leading.group("title").strip()):
+            return PageReferenceEvidence("CURRENT_PAGE", None, edit)
+        title = _english_title(leading.group("title"))
+        return PageReferenceEvidence("TITLE", title, edit) if title else None
+    for pattern in ENGLISH_TRAILING_PAGE:
+        trailing = pattern.match(source)
+        if trailing is None:
+            continue
+        edit = trailing.group("edit").strip()
+        if ENGLISH_CURRENT.match(trailing.group("title").strip()) or not is_edit_clause(edit):
+            return None
+        title = _english_title(trailing.group("title"))
+        return PageReferenceEvidence("TITLE", title, edit) if title else None
+    return None
 
 
 def _source_instruction(source: str, marker_start: int) -> str | None:
@@ -243,6 +298,8 @@ def explicit_trailing_page_edit(source: str) -> PageReferenceEvidence | None:
     if evidence.reference_type != "TITLE" or not evidence.instruction:
         return None
     normalized = unicodedata.normalize("NFC", source).strip()
+    if english_page_reference(normalized) is not None:
+        return evidence
     markers = _target_markers(normalized)
     if not markers or any(not _is_generic_remention(normalized, marker) for marker in markers[1:]):
         return None
@@ -291,6 +348,10 @@ def detect_page_reference(
     scoped = scoped_page_reference(normalized)
     if scoped is not None:
         return PageReferenceEvidence("TITLE", scoped[1], scoped[0], scope=scoped[2])
+
+    english = english_page_reference(normalized)
+    if english is not None:
+        return english
 
     if not markers:
         command = EDIT_VERB.match(normalized)
