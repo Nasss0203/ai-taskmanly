@@ -10,7 +10,8 @@ from app.modules.modification_planner.services.block_delete import parse_block_d
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.modules.page_intent.services.page_reference_evidence import (
-    PAGE_MARKER, QUOTED_TEXT, content_page_reference, detect_page_reference, is_read_only_page_request,
+    PAGE_MARKER, QUOTED_TEXT, activity_page_reference, content_page_reference, detect_page_reference,
+    is_read_only_page_request,
     has_multiple_page_targets, mask_quoted_text, source_backed_edit_instruction,
 )
 
@@ -243,7 +244,7 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
         return result('UNCLEAR')
     # M7 (H1): "tìm trang có nói về X rồi thêm …" edits the Page it finds;
     # without an edit, "tìm …" stays a read-only request below.
-    if content_page_reference(source) is not None:
+    if content_page_reference(source) is not None or activity_page_reference(source) is not None:
         return result('MODIFY_PAGE')
     if not request.selectedText and not inline_source(source):
         question = page_question(source, has_current_page=bool(request.currentPageId))

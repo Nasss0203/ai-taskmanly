@@ -391,7 +391,7 @@ def detect_page_reference(
     if CURRENT_REFERENCE.match(remainder):
         following = CURRENT_REFERENCE.match(remainder)
         tail = remainder[following.end():].lstrip(" ,;:.")
-        if (not normalized[:marker.start()].strip()
+        if (re.fullmatch(r"(?:(?:ở|trong|trên|tại)\s*)?", normalized[:marker.start()].strip(), re.IGNORECASE)
                 and is_edit_clause(tail)):
             return PageReferenceEvidence("CURRENT_PAGE", None, tail)
         # Only an exact current-page phrase is strong evidence.
@@ -508,6 +508,18 @@ ACTIVITY_EN = re.compile(
     r"(?:edited|updated|changed|modified|worked on)(?:\s+(?P<time>.+?))?$",
     re.IGNORECASE | re.DOTALL,
 )
+ACTIVITY_VI_FIRST = re.compile(
+    r"^(?:ở|trong|trên|tại)\s+(?:trang|page)\s+(?:(?P<hint>.+?)\s+)?(?:(?:mà|do)\s+)?(?:tôi|mình|em)\s+"
+    r"(?P<just>(?:(?:vừa|mới|đã)\s+)*)(?:chỉnh sửa|sửa|chỉnh|cập nhật|viết)"
+    rf"(?:\s+(?P<time>.+?))?(?:\s*[,:]\s*|\s+)(?P<edit>{EDIT_VERB.pattern[1:]}.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+ACTIVITY_EN_FIRST = re.compile(
+    r"^(?:on|in|inside)\s+(?:the\s+)?(?:(?P<hint>.+?)\s+)?page\s+(?:that\s+)?i\s+"
+    r"(?P<just>(?:(?:last|just|recently)\s+)*)(?:edited|updated|changed|modified|worked on)"
+    rf"(?:\s+(?P<time>.+?))?(?:\s*[,:]\s*|\s+)(?P<edit>{EDIT_VERB.pattern[1:]}.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
 ACTIVITY_TIMES: tuple[tuple[re.Pattern[str], ActivityRelative], ...] = (
     (re.compile(r"^(?:gần đây nhất|gần nhất|lần cuối|lần gần nhất|mới nhất|cuối cùng|most recently|last)$"), "LATEST"),
     (re.compile(r"^(?:hôm nay|today)$"), "TODAY"),
@@ -546,7 +558,7 @@ def activity_page_reference(source: str) -> tuple[str, ActivityReference] | None
     text = ACTIVITY_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
     if len(_target_markers(text)) != 1:
         return None
-    for pattern in (ACTIVITY_VI, ACTIVITY_EN):
+    for pattern in (ACTIVITY_VI_FIRST, ACTIVITY_EN_FIRST, ACTIVITY_VI, ACTIVITY_EN):
         match = pattern.match(text)
         if not match:
             continue

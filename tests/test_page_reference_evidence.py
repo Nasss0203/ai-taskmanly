@@ -134,12 +134,15 @@ def test_unquoted_title_before_edit_clause(source, title, instruction):
     [
         # A read request is not an edit, even with an edit word later.
         "Xem trong trang sub man thêm gì",
-        # A description is never a Page name.
-        "Trong trang tôi sửa hôm qua thêm checklist",
     ],
 )
 def test_unquoted_inline_edit_needs_locative_prefix_and_a_name(source):
     assert detect_page_reference(source).instruction is None
+
+
+def test_an_activity_named_first_is_no_page_name():
+    evidence = detect_page_reference("Trong trang tôi sửa hôm qua thêm checklist")
+    assert (evidence.reference_type, evidence.title, evidence.instruction) == ("ACTIVITY", None, "thêm checklist")
 
 
 @pytest.mark.parametrize(
