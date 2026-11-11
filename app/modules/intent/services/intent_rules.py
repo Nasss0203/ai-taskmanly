@@ -10,10 +10,13 @@ from app.modules.modification_planner.services.block_delete import parse_block_d
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.modules.page_intent.services.page_reference_evidence import (
-    PAGE_MARKER, QUOTED_TEXT, activity_page_reference, content_page_reference, detect_page_reference,
+    QUOTED_TEXT, activity_page_reference, content_page_reference, detect_page_reference,
     is_read_only_page_request,
     has_multiple_page_targets, mask_quoted_text, source_backed_edit_instruction,
 )
+
+
+PAGE_WORD = re.compile(r'(?<!\w)(?<!tinh )(?:page|trang)(?!\w)(?!\s+thai\b)', re.IGNORECASE)
 
 
 def fold(text: str) -> str:
@@ -95,7 +98,7 @@ def inline_source(source: str) -> str | None:
     if writing_action(source) is None:
         return None
     # A Page object is not source text, even when its title is quoted.
-    if PAGE_MARKER.search(mask_quoted_text(source).split(':', 1)[0]):
+    if PAGE_WORD.search(mask_quoted_text(source).split(':', 1)[0]):
         return None
     if ':' in source:
         value = source.split(':', 1)[1].strip()
@@ -162,7 +165,7 @@ def creation_evidence(source: str) -> bool:
     planning = re.match(r'^len ke hoach\s+(.+)', text)
     if planning:
         subject = planning.group(1).strip()
-        return (not subject.endswith('?') and not PAGE_MARKER.search(subject)
+        return (not subject.endswith('?') and not PAGE_WORD.search(subject)
                 and not re.match(r'^(?:la gi|nhu the nao|co nghia|nghia la)\b', subject))
     if re.match(r'^lam cho (?:toi|minh) (?:mot|1) (?:trang|page)\b', text):
         return True
@@ -198,8 +201,8 @@ def edit_evidence(request: IntentRequest) -> bool:
 def multiple_commands(source: str) -> bool:
     # "tích A và Đích đến": a name after "và" is not a command (VERB_SPELLINGS).
     text = directive_text(mark_other_words(source))
-    markers = list(PAGE_MARKER.finditer(text))
-    if len(markers) > 1 and re.search(r'\b(?:va|and)\s+(?:trang|page)\b', text):
+    markers = list(PAGE_WORD.finditer(text))
+    if len(markers) > 1 and re.search(r'\b(?:va|and)\s+(?:trang|page)\b(?!\s+thai\b)', text):
         return True
     # A second quoted name joined to a Page target is another target, not
     # source text. Rename's "thành/to" remains a single target.
@@ -258,7 +261,7 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     if is_page_summary(source) or is_read_only(source) or unsupported_request(source):
         return result('OTHER')
     text = directive_text(source)
-    has_page = bool(PAGE_MARKER.search(text))
+    has_page = bool(PAGE_WORD.search(text))
     # "tạo bản ghi xong rồi, trong trang X" ticks a to-do: decided before creation.
     if has_page and parse_todo_status(source) is not None:
         evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))

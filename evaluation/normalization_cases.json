@@ -192,6 +192,38 @@
     {
       "input": "thêm to-do cập nhật trang chủ đi",
       "output": "thêm to-do cập nhật trang chủ đi"
+    },
+    {
+      "input": "cho mình tạo trang Kế hoạch học kỳ 2 gồm đặt vé, mua quà",
+      "output": "tạo trang Kế hoạch học kỳ 2 gồm đặt vé, mua quà"
+    },
+    {
+      "input": "cho mình ghi thêm việc gọi cho khách hàng vào trang Hội họp tuần",
+      "output": "ghi thêm việc gọi cho khách hàng vào trang Hội họp tuần"
+    },
+    {
+      "input": "cho mình thêm nộp báo cáo tuần vào phần Môn Toán trong trang Ôn thi cuối kỳ",
+      "output": "thêm nộp báo cáo tuần vào phần Môn Toán trong trang Ôn thi cuối kỳ"
+    },
+    {
+      "input": "cho mình một trang mới tên Nhật ký",
+      "output": "tạo trang Nhật ký"
+    },
+    {
+      "input": "cho tôi tạo trang Họp nhóm",
+      "output": "tạo trang Họp nhóm"
+    },
+    {
+      "input": "cho minh tao trang Hop nhom",
+      "output": "tao trang Hop nhom"
+    },
+    {
+      "input": "cho mình xem trang Hội họp tuần",
+      "output": "cho mình xem trang Hội họp tuần"
+    },
+    {
+      "input": "cho mình biết trang sub man nói về gì",
+      "output": "cho mình biết trang sub man nói về gì"
     }
   ]
 }

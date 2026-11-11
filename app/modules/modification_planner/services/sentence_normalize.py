@@ -32,7 +32,13 @@ LEAD = re.compile(
 )
 # "mình cần / tôi muốn thêm …": only before a verb ("mình cần một trang" creates a Page).
 WANT = re.compile(rf"^(?:minh|toi|em) (?:can|muon) (?={VERB}\b)")
-LET_ME = re.compile(rf"^cho (?:toi|minh|em) (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB})\b)")
+LET_ME = re.compile(
+    rf"^cho (?:toi|minh|em) (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|them|ghi them|chen|bo sung|tao|lap)\b)"
+)
+GIVE_PAGE = re.compile(
+    r"^cho (?:toi|minh|em) (?:mot (?:trang|page)(?: moi)?(?: (?:co ten|ten))?"
+    r"|(?:trang|page) (?:moi(?: (?:co ten|ten))?|co ten|ten)) (?=\S)"
+)
 DONE_SHORT = re.compile(r"(?<=\bxong) r(?=[\s.!?]*$)")
 # "cho mình cái checklist …" asks for a block: it reads "thêm checklist …".
 GIVE_ME = re.compile(rf"^cho (?:minh|toi|em)(?: (?:cai|mot|them))? (?={KIND}\b)")
@@ -132,6 +138,7 @@ def normalize_instruction(instruction: str) -> str:
             text = _sub(text, LOOSE_TAIL, lambda m, f: "")
     text = _sub(text, WANT, lambda m, f: "")
     text = _sub(text, LET_ME, lambda m, f: "")
+    text = _sub(text, GIVE_PAGE, lambda m, f: "tạo trang ")
     text = _sub(text, DONE_SHORT, lambda m, f: " rồi")
     text = _sub(text, TICK_WORD, lambda m, f: "bỏ tích" if m.group("untick") else "tích")
     text = _sub(text, GIVE_ME, lambda m, f: "thêm ")
