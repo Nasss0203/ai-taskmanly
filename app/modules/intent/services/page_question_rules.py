@@ -3,24 +3,26 @@ import unicodedata
 from dataclasses import dataclass
 
 from app.modules.modification_planner.services.sentence_text import Folded, command_text, fold
+from app.shared.vi_vocabulary import pattern
 
 QUOTES = "\"'`“”‘’"
+LEAD = pattern("lead")
 EDIT_START = re.compile(
-    r"^(?:(?:hay|vui long|lam on|giup toi|giup minh|ban oi|ban hay|please|can you|could you)\s+)*"
+    rf"^(?:{LEAD}\s+)*"
     r"(?:them|chen|bo sung|ghi them|tich|danh dau|bo tich|bo danh dau|sua|chinh sua|doi|thay|thay doi|"
     r"cap nhat|xoa|bo|go|tao|lap|dich|viet|mo rong|rut gon|add|insert|append|tick|check|uncheck|mark|"
     r"change|update|edit|replace|rename|delete|remove|create|make|translate|write|move|di chuyen|"
     r"chuyen|nhan ban|duplicate|share|chia se)\b"
 )
 FOLLOW_UP_EDIT = re.compile(
-    r"\b(?:thi|roi|va|sau do|then|and)\s+(?:(?:hay|giup toi|giup minh)\s+)?"
+    rf"\b(?:thi|roi|va|sau do|then|and)\s+(?:{LEAD}\s+)?"
     r"(?:them|tich|danh dau|sua|doi|xoa|bo|go|tao|add|tick|mark|delete|remove|update|change)\b"
 )
 MARKER = re.compile(r"(?<!\w)(?P<kind>trang|page|bang|table|database|co so du lieu)(?!\w)")
 CURRENT = re.compile(r"^(?:nay|hien tai|dang mo|this|current)\b")
 NOT_A_NAME = re.compile(r"^(?:nao|la gi|la cai gi|gi|which|nay\s+la)\b")
 HOW_TO = re.compile(
-    r"^(?:(?:hay|vui long|giup toi|giup minh|ban oi|cho (?:toi|minh) hoi|please|can you|could you)\s+)*"
+    rf"^(?:{pattern('lead', 'lead_ask')}\s+)*"
     r"(?:cach\s+\w+|lam sao|lam the nao|huong dan|how (?:do|can|should) (?:i|we|you)|how to)\b"
 )
 HISTORY = re.compile(
@@ -29,7 +31,7 @@ HISTORY = re.compile(
 NAME_END = re.compile(
     r"\s*(?:[?,.!;:]|\s(?:con|co|da|chua|giup|noi|gom|thi|la|bao|ai|khi|duoc|hien|dang|ve|"
     r"may|tom tat|has|have|is|are|does|do|so|with|about|contain|contains)\b|"
-    r"\s(?:nhe|nha|di|voi)\s*(?=[?,.!;:]|$)|"
+    rf"\s{pattern('tail', 'trailing_go', 'trailing_with')}\s*(?=[?,.!;:]|$)|"
     r"\s(?:o|trong|tai|cua|thuoc)\s+(?=(?:trang|page|bang|table)\b)|\s(?:in|on|of)\s+the\s|$)"
 )
 ENGLISH_NAME = re.compile(r"(?:\b(?:in|on|of)\s+(?:the\s+)?|\bthe\s+)(?P<name>.+?)\s+(?:page|table|database)\b")

@@ -11,15 +11,16 @@ are at least two. NestJS ``inlineWritingText`` reads sentences the same way
 import re
 import unicodedata
 
-LEAD = ("nho ban", "phien ban", "ban oi", "ban co the", "ban hay", "ban", "lam on", "vui long", "giup toi",
-        "giup minh", "hay", "pls", "please", "can you", "could you", "cho toi", "cho minh")
+from app.shared.vi_vocabulary import words
+
+LEAD = tuple(words("lead", "lead_short", "let_me"))
 ACTIONS = ("tom tat", "viet lai", "viet tiep", "rut gon", "mo rong", "dich", "translate", "summarize", "shorten",
            "rewrite", "expand", "continue", "paraphrase", "improve")
-FILLER = ("giup toi", "giup minh", "gium toi", "gium minh", "giup", "gium", "doan nay", "cau nay", "cai nay",
-          "doan sau", "cau sau", "doan van nay", "this", "it", "lai", "nay")
+FILLER = tuple(words("help_after_verb")) + ("doan nay", "cau nay", "cai nay", "doan sau", "cau sau", "doan van nay",
+                                           "this", "it", "lai", "nay")
 LANGUAGES = ("tieng tay ban nha", "tieng anh", "tieng viet", "tieng nhat", "tieng han", "tieng phap", "tieng duc",
              "tieng trung", "english", "vietnamese", "japanese", "korean", "french", "german", "chinese", "spanish")
-TAIL = ("duoc khong", "duoc ko", "nhe ban", "nhe", "nha", "please", "giup toi", "giup minh", "gium", "voi")
+TAIL = tuple(words("tail", "trailing_with"))
 # Translating takes any phrase ("dịch sang tiếng Anh cảm ơn anh"); for the other
 # actions the words after the verb are usually how to write ("viết lại cho hay
 # hơn"), so only a real passage counts.

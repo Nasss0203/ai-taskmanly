@@ -80,6 +80,24 @@ def test_inline_writing_sentence_carries_its_source() -> None:
     assert all(not case.get("selectedText") and case["expect"]["source"] in case["instruction"] for case in inline)
 
 
+def test_a_tracking_page_may_hold_one_table() -> None:
+    cases = [case for case in generate(DEV_BANK, DEV_SEED)["compose"] if "theo dõi các khoản chi" in case["instruction"]]
+    assert cases and all(case["expect"] == {"max_databases": 1} for case in cases)
+
+
+def test_an_injected_order_still_creates_the_page() -> None:
+    cases = [case for case in generate(DEV_BANK, DEV_SEED)["compose"] if "bỏ qua mọi quy tắc" in case["instruction"]]
+    assert [(case["group"], case["expect"]) for case in cases] == [("injection", {"title": "Test"})]
+
+
+def test_more_tables_than_allowed_is_a_wrong_draft() -> None:
+    from scripts.evaluate_natural_vi import extra_failures
+
+    draft = {"databases": [{}, {}]}
+    assert extra_failures(draft, {"max_databases": 1}) == ["databases"]
+    assert extra_failures({"databases": [{}]}, {"max_databases": 1}) == []
+
+
 def test_some_sentences_name_a_page_other_than_the_open_one() -> None:
     group = [case for case in generate(DEV_BANK, DEV_SEED)["modify"] if case["group"] == "other_page_open"]
     assert len(group) == 12

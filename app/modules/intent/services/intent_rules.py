@@ -3,6 +3,7 @@
 import re
 import unicodedata
 
+from app.shared.vi_vocabulary import pattern
 from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
 from app.modules.intent.services.page_question_rules import page_question
@@ -45,10 +46,7 @@ def mark_other_words(source: str) -> str:
 
 def command_text(source: str) -> str:
     text = fold(source).strip()
-    return re.sub(
-        r'^(?:(?:hay|vui long|giup toi|giup minh|ban hay|please|can you|could you|would you)\s+)+',
-        '', text,
-    )
+    return re.sub(rf'^(?:{pattern("lead")}\s+)+', '', text)
 
 
 ACTION_PATTERNS: tuple[tuple[WritingActionName, str], ...] = (
@@ -298,5 +296,5 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
 VAGUE_POINTING = re.compile(
     r'^(?:(?:lam|xu ly|giai quyet|do|fix|handle)\s+)?(?:(?:cai|viec|chuyen|phan)\s+)?'
     r'(?:do|nay|kia|ay|no|vay|the|that|this|it)'
-    r'(?:\s+(?:di|nhe|nha|giup(?:\s+(?:toi|minh))?|voi|luon|ngay|please))*$'
+    rf'(?:\s+(?:{pattern("tail", "loose_tail")}|luon|ngay))*$'
 )

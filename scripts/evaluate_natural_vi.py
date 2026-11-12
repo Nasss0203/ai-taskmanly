@@ -81,6 +81,12 @@ def writing_outcome(row: dict[str, Any], expect: dict[str, Any]) -> str:
     return DRAFT if row["failed"] else OK
 
 
+def extra_failures(draft: dict[str, Any], expect: dict[str, Any]) -> list[str]:
+    if "max_databases" in expect and len(draft.get("databases") or []) > expect["max_databases"]:
+        return ["databases"]
+    return []
+
+
 def compose_outcome(row: dict[str, Any], expect: dict[str, Any]) -> str:
     if row.get("error"):
         return _error_outcome(row["error"])
@@ -197,7 +203,7 @@ def _compose_once(services: Any) -> Callable:
                 response = await composer.process(PageCompositionRequest(instruction=case["instruction"]))
                 row["usedModel"] = row["usedModel"] or response.provider == MODEL_PROVIDER
                 draft = response.result.model_dump(mode="json")
-                row["failed"] = check_composition(draft, expect)
+                row["failed"] = check_composition(draft, expect) + extra_failures(draft, expect)
                 written = {text_key(block["content"].get("text", "")) for block in draft.get("blocks", [])
                            if isinstance(block.get("content"), dict)}
                 if any(text_key(text) not in written for text in expect.get("texts", [])):

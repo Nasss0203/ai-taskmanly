@@ -481,8 +481,8 @@ def test_model_cannot_authorize_modifications_absent_from_source(source, fabrica
     ("Modify the existing page named Release 2.0. Add one TEXT block.", "Release 2.0", "Add one TEXT block."),
     ('Trong page tên "Release 2.0", hãy thêm checklist QA', "Release 2.0", "hãy thêm checklist QA"),
     ("Add checklist to this page", None, "Add checklist to this page"),
-    ("Please modify page Release 2.0", "Release 2.0", "Please modify page Release 2.0"),
-    ("Could you replace the heading in page Release 2.0", "Release 2.0", "Could you replace the heading"),
+    ("Please modify page Release 2.0", "Release 2.0", "modify page Release 2.0"),
+    ("Could you replace the heading in page Release 2.0", "Release 2.0", "replace the heading"),
 ])
 def test_edit_instruction_comes_only_from_source(source, title, expected):
     provider = FakeLLMProvider([json.dumps(result(

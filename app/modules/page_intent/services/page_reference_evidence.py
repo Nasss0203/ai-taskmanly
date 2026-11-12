@@ -13,6 +13,7 @@ from typing import Literal
 from app.modules.modification_planner.services.block_delete import parse_block_delete
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
+from app.shared.vi_vocabulary import pattern
 
 
 ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY", "DESCRIPTION", "CONTENT"]
@@ -39,9 +40,9 @@ EDIT_PREPOSITION = re.compile(
     r"^(?P<edit>.+?)\s+(?:vào|vao|trong|ở|o|trên|tren|tại|tai|cho|to|in|on)\s*$",
     re.IGNORECASE | re.DOTALL,
 )
+POLITE_TAIL = pattern("tail", "tail_marked_only", marked=True)
 EDIT_VERB = re.compile(
-    r"^(?:(?:hãy|vui lòng|giúp tôi|giúp mình|bạn hãy|tôi muốn|mình muốn|"
-    r"please|can you|could you|would you|i want to|i need you to)\s+)*"
+    rf"^(?:{pattern('lead', 'want', marked=True)}\s+)*"
     r"(?:thêm|chèn|sửa|chỉnh|chỉnh sửa|cập nhật|đổi|xóa|xoá|"
     r"bổ sung|ghi|viết lại|viết|rút gọn|dịch|chép|thay thế|di chuyển|sắp xếp|định dạng|"
     r"them|chen|sua|chinh sua|chinh|cap nhat|doi|xoa|bo sung|viet lai|viet|rut gon|dich|"
@@ -67,7 +68,7 @@ TRAILING_QUOTED_EDIT = re.compile(
 # "Trong trang X thêm ..." with a bare X: only a locative (or nothing) may
 # precede the Page noun, and the first edit verb after the name ends it.
 LEADING_LOCATIVE = re.compile(
-    r"^(?:(?:hãy|vui lòng|please|giúp mình|giúp tôi|cho mình|cho tôi|nhờ bạn|bạn ơi|bạn)\s+)*"
+    rf"^(?:{pattern('lead', 'lead_short', 'let_me', marked=True)}\s+)*"
     r"(?:(?:trong|ở|tại|in|on|inside)\s+)?$",
     re.IGNORECASE,
 )
@@ -250,7 +251,7 @@ def source_backed_edit_instruction(
 
 def is_read_only_page_request(source: str) -> bool:
     return bool(re.match(
-        r"^(?:(?:please|can you|could you|hãy|vui lòng)\s+)?"
+        rf"^(?:{pattern('lead', marked=True)}\s+)?"
         # "mở rộng" (expand) is a writing action, not "mở" (open).
         r"(?:read|show|view|open|find|search|what|how|đọc|xem|mở(?!\s+rộng)|tìm|"
         r"cho (?:tôi|mình|em) xem)\b",
@@ -410,7 +411,7 @@ def detect_page_reference(
     remainder = normalized[marker.end():].strip()
     instruction = _source_instruction(normalized, marker.start())
     if instruction:
-        remainder = re.sub(r"\s+(?:nhé|nha|ạ)[.!?\s]*$", "", remainder, flags=re.IGNORECASE)
+        remainder = re.sub(rf"\s+{POLITE_TAIL}[.!?\s]*$", "", remainder, flags=re.IGNORECASE)
     if not remainder:
         if ENGLISH_CURRENT_BEFORE_MARKER.search(normalized[:marker.start()]):
             return PageReferenceEvidence("CURRENT_PAGE", None, instruction)
@@ -558,7 +559,7 @@ ACTIVITY_TIMES: tuple[tuple[re.Pattern[str], ActivityRelative], ...] = (
     (re.compile(r"^(?:gần đây|dạo này|recently|lately)$"), "RECENT"),
 )
 DAYS_AGO = re.compile(r"^(?P<days>\d{1,2})\s+(?:ngày trước|days? ago)$")
-ACTIVITY_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+ACTIVITY_TAIL = re.compile(rf"(?:[\s,]+{POLITE_TAIL})*[\s.!?]*$", re.IGNORECASE)
 
 
 def _activity_time(time: str | None, just: str) -> ActivityReference | None:
@@ -632,7 +633,7 @@ SCOPE_EN = re.compile(
     r"(?:(?P<kind>project|teamspace)\s+(?P<name>.+?)|(?P<name2>.+?)\s+(?P<kind2>page|project|teamspace))$",
     re.IGNORECASE | re.DOTALL,
 )
-SCOPE_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+SCOPE_TAIL = re.compile(rf"(?:[\s,]+{POLITE_TAIL})*[\s.!?]*$", re.IGNORECASE)
 QUOTE_CHARS = "\"'“”‘’`"
 
 
@@ -693,7 +694,7 @@ DESCRIPTION_VI = re.compile(
 )
 # "Sửa trang dùng để …: thêm …" puts the edit after the description.
 DESCRIPTION_VI_FIRST = re.compile(
-    r"^(?:(?:hãy|vui lòng)\s+)?(?:sửa|chỉnh sửa|chỉnh|cập nhật)\s+trang\s+"
+    rf"^(?:{pattern('lead', marked=True)}\s+)?(?:sửa|chỉnh sửa|chỉnh|cập nhật)\s+trang\s+"
     rf"{DESCRIPTION_CUE_VI}\s+(?P<description>[^:,;]+?)\s*[:,;]\s*(?P<edit>.+)$",
     re.IGNORECASE | re.DOTALL,
 )
@@ -707,7 +708,7 @@ DESCRIPTION_EN_FIRST = re.compile(
     rf"{DESCRIPTION_CUE_EN}\s+(?P<description>[^:,;]+?)\s*[:,;]\s*(?P<edit>.+)$",
     re.IGNORECASE | re.DOTALL,
 )
-DESCRIPTION_TAIL = re.compile(r"(?:[\s,]+(?:nhé|nha|ạ|please))*[\s.!?]*$", re.IGNORECASE)
+DESCRIPTION_TAIL = re.compile(rf"(?:[\s,]+{POLITE_TAIL})*[\s.!?]*$", re.IGNORECASE)
 
 
 def description_page_reference(source: str) -> tuple[str, str] | None:
@@ -747,7 +748,7 @@ CONTENT_VI = re.compile(
 )
 # "Tìm trang có nói về OAuth rồi thêm …": the Page first, then the edit.
 CONTENT_VI_FIND = re.compile(
-    r"^(?:(?:hãy|bạn hãy|giúp tôi|giúp mình)\s+)?tìm\s+(?:(?:một|1|cái)\s+)?(?:trang|page)\s+"
+    rf"^(?:{pattern('lead', marked=True)}\s+)?tìm\s+(?:(?:một|1|cái)\s+)?(?:trang|page)\s+"
     rf"(?:nào\s+)?{CONTENT_CUE_VI}\s+(?P<topic>[^,;:]+?)"
     r"(?:\s*[,;:]\s*(?:(?:rồi|sau đó|xong)\s+)?|\s+(?:rồi|sau đó)\s+)(?P<edit>.+)$",
     re.IGNORECASE | re.DOTALL,

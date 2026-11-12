@@ -224,6 +224,50 @@
     {
       "input": "cho mình biết trang sub man nói về gì",
       "output": "cho mình biết trang sub man nói về gì"
+    },
+    {
+      "input": "lập trang Dự án mới gồm có gọi khách, in hợp đồng và đặt vé",
+      "output": "tạo trang Dự án mới gồm gọi khách, in hợp đồng và đặt vé"
+    },
+    {
+      "input": "cho mình lập trang Dự án mới gồm có gọi khách, in hợp đồng và đặt vé",
+      "output": "tạo trang Dự án mới gồm gọi khách, in hợp đồng và đặt vé"
+    },
+    {
+      "input": "lap trang Du an moi gom co goi khach va dat ve",
+      "output": "tạo trang Du an moi gom goi khach va dat ve"
+    },
+    {
+      "input": "làm giúp mình một trang Nhật ký",
+      "output": "tạo trang Nhật ký"
+    },
+    {
+      "input": "bạn ơi, nhờ bạn tạo trang Nhật ký",
+      "output": "tạo trang Nhật ký"
+    },
+    {
+      "input": "tạo trang Tiệc cuối năm gồm in hợp đồng, đặt vé và ôn lại từ vựng với",
+      "output": "tạo trang Tiệc cuối năm gồm in hợp đồng, đặt vé và ôn lại từ vựng"
+    },
+    {
+      "input": "thêm checklist gồm in tài liệu và gọi khách với",
+      "output": "thêm checklist gồm in tài liệu và gọi khách"
+    },
+    {
+      "input": "tạo trang Ăn trưa gồm mua đồ ăn mang đi",
+      "output": "tạo trang Ăn trưa gồm mua đồ ăn mang đi"
+    },
+    {
+      "input": "thêm việc viết thiệp cảm ơn",
+      "output": "thêm việc viết thiệp cảm ơn"
+    },
+    {
+      "input": "mình muốn thêm heading Kết luận vào trang sub man được không",
+      "output": "thêm heading Kết luận vào trang sub man"
+    },
+    {
+      "input": "phiền bạn sửa Gọi khách thành Gọi khách hàng giùm",
+      "output": "sửa Gọi khách thành Gọi khách hàng"
     }
   ]
 }

@@ -17,6 +17,7 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     ModificationPlannerReference,
 )
 from app.shared.list_markers import strip_list_marker
+from app.shared.vi_vocabulary import pattern
 
 
 REFERENCE_CHECKLIST_PROVIDER = "rules"
@@ -26,7 +27,7 @@ PLAN_ADAPTER = TypeAdapter(AiModificationPlan)
 
 # "thêm checklist", "thêm checklist các bug blocker", "add a checklist of blocker bugs"
 CHECKLIST = re.compile(
-    r"^(?:(?:hay|vui long|please)\s+)?(?:them|tao|add|create)\s+(?:(?:mot|1|a|an)\s+)?"
+    rf"^(?:{pattern('lead')}\s+)?(?:them|tao|add|create)\s+(?:(?:mot|1|a|an)\s+)?"
     r"(?:checklist|danh sach viec|to-?do list)(?:\s+(?P<topic>.+))?$"
 )
 # Words that say nothing about which heading is meant.

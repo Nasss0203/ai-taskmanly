@@ -12,10 +12,11 @@ import re
 import unicodedata
 
 from app.modules.modification_planner.services.sentence_text import COMMAND_PREFIX, TARGET, Folded
+from app.shared.vi_vocabulary import pattern
 
 # Polite words only as written: "chủ nhà" and "mang đi" keep their last word.
 POLITE_TAIL = re.compile(
-    r"(?:[\s,.!]+(?:nhé|nhe|nha|ạ|please|giúp tôi|giúp mình))*[\s,.!]*$", re.IGNORECASE,
+    rf"(?:[\s,.!]+{pattern('tail', 'tail_marked_only', marked=True)})*[\s,.!]*$", re.IGNORECASE,
 )
 # A page end is a place, not a Page target: cut it before TARGET reads "… to … page".
 PAGE_END = re.compile(

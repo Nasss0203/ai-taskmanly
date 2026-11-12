@@ -8,6 +8,7 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiPageContextDatabaseProperty,
 )
 from app.modules.modification_planner.services.sentence_text import text_key
+from app.shared.vi_vocabulary import pattern
 
 MAX_LISTED = 10
 VALUE_TYPES = {"SELECT", "STATUS", "MULTI_SELECT"}
@@ -21,7 +22,7 @@ ASKED_VALUE = re.compile(
     r"(?:(?:are|is|o trang thai|co trang thai|trang thai|dang o|dang|la)\s+)?(?P<value>.+?)"
     r"(?:\s+(?:trong|o|in|of|tai|cua)\b.*)?$"
 )
-POLITE_TAIL = re.compile(r"(?:\s+(?:nhe|nha|voi|di|please|gium(?: (?:minh|toi))?|giup (?:minh|toi|em)))+$")
+POLITE_TAIL = re.compile(rf"(?:\s+{pattern('tail', 'trailing_with', 'trailing_go')})+$")
 NOT_A_VALUE = re.compile(r"^(?:(?:trong|o|in|of|co|the|tat ca|all)\b|bang\b|table\b)")
 
 

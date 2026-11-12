@@ -8,6 +8,7 @@ import re
 import unicodedata
 
 from app.shared.list_markers import strip_list_marker
+from app.shared.vi_vocabulary import pattern
 
 # Kế hoạch câu tự nhiên (N1, N2), like NestJS ``withoutLeadingTarget``: polite
 # words and a Page named before the verb ("ở trang Họp tuần, sửa A thành B").
@@ -17,16 +18,13 @@ EDIT_VERB = (
     r"hoan thanh|lam xong|check|uncheck|mark|chinh sua|thay doi|doi|sua|thay|chinh|cap nhat|"
     r"change|update|edit|replace|rename|xoa|bo|go|delete|remove)\b"
 )
-FILLER = (
-    r"(?:hay|vui long|lam on|giup toi|giup minh|giup|ban oi|ban hay|cho toi|cho minh|toi muon|"
-    r"minh muon|toi can|minh can|please|can you|could you|would you|i want to|i'd like to)"
-)
+FILLER = pattern("lead", "let_me", "want", "help_after_verb")
 LEADING_PAGE = (
     r"(?:(?:o|trong|tai|ben trong|tren|in|on|at)\s+)?(?:(?:the|this)\s+)?"
     r"(?:(?:trang|page)\s+.+?|.+?\s+page)(?=\s*[,:]?\s+" + EDIT_VERB + r")"
 )
 COMMAND_PREFIX = re.compile(r"^(?:(?:" + FILLER + r"|" + LEADING_PAGE + r")\s*[,:]?\s+)+")
-POLITE_SUFFIX = re.compile(r"(?:[\s,.!]+(?:nhe|nha|di|giup toi|giup minh|please))*[\s,.!]*$")
+POLITE_SUFFIX = re.compile(rf"(?:[\s,.!]+{pattern('tail', 'trailing_go')})*[\s,.!]*$")
 # The Page target ends the sentence; it is resolved elsewhere, never content.
 TARGET = re.compile(
     r"[\s,]+(?:(?:vao|trong|o|cua|tai|on|in|to)\s+(?:the\s+)?(?:trang|page)\b"

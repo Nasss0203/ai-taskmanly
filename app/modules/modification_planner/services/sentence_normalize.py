@@ -11,56 +11,61 @@ import re
 from collections.abc import Callable
 
 from app.modules.modification_planner.services.sentence_text import Folded, command_text
+from app.shared.vi_vocabulary import pattern
 
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 
-EDIT_VERB = r"(?:chinh sua|thay doi|doi|sua|thay|cap nhat|change|update|edit|rename)"
-DELETE_VERB = r"(?:xoa(?: bo)?|go(?: bo)?|delete|remove)"
-TICK_VERB = r"(?:bo tich|bo danh dau|danh dau(?: (?:da )?(?:xong|hoan thanh))?|tich(?: (?:da )?xong)?|hoan thanh|check|uncheck|mark)"
+EDIT_VERB = pattern("verb_edit")
+DELETE_VERB = pattern("verb_delete")
+TICK_VERB = pattern("verb_tick")
 # Kế hoạch sửa tính năng viết (V1): writing verbs, so "bạn có thể dịch giúp tôi
 # đoạn này … được không" reads as "dịch đoạn này …" for intent.
-WRITE_VERB = (r"(?:dich|tom tat|viet lai|viet tiep|rut gon|mo rong|viet dai ra|viet hay hon|translate|"
-              r"summarize|rewrite|shorten|expand|continue|paraphrase|improve)")
-VERB = rf"(?:them|chen|bo sung|ghi them|add|insert|{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{WRITE_VERB})"
+WRITE_VERB = pattern("verb_write")
+INSERT_VERB = pattern("verb_insert")
+CREATE_VERB = pattern("verb_create_page")
+VERB = rf"(?:{INSERT_VERB}|{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{WRITE_VERB})"
 KIND = r"(?:to-do|todo|to-dos|todos|heading|tieu de|checklist|doan van|doan|dong|trich dan|ghi chu|viec|task|tasks|muc)"
+LET_ME_WORDS = pattern("let_me")
 
 # S2: requests wrapped in polite words.
-LEAD = re.compile(
-    r"^(?:(?:nho ban|phien ban|ban oi|ban co the|ban giup (?:minh|toi)|ban hay|ban|lam on|vui long|"
-    r"giup (?:minh|toi)|hay|pls|plz|please|can you|could you|would you)"
-    r"\s*,?\s+)+"
-)
+LEAD = re.compile(rf"^(?:{pattern('lead', 'lead_short')}\s*,?\s+)+")
+POLITE_LEAD = re.compile(rf"^(?:{pattern('lead', 'lead_ask')}|{pattern('lead_short')}(?=\s+{VERB}\b))\s*,?\s+")
 # "mình cần / tôi muốn thêm …": only before a verb ("mình cần một trang" creates a Page).
-WANT = re.compile(rf"^(?:minh|toi|em) (?:can|muon) (?={VERB}\b)")
+WANT = re.compile(rf"^{pattern('want')} (?={VERB}\b)")
 LET_ME = re.compile(
-    rf"^cho (?:toi|minh|em) (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|them|ghi them|chen|bo sung|tao|lap)\b)"
+    rf"^{LET_ME_WORDS} (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{INSERT_VERB}|{CREATE_VERB})\b)"
 )
 GIVE_PAGE = re.compile(
-    r"^cho (?:toi|minh|em) (?:mot (?:trang|page)(?: moi)?(?: (?:co ten|ten))?"
+    rf"^{LET_ME_WORDS} (?:mot (?:trang|page)(?: moi)?(?: (?:co ten|ten))?"
     r"|(?:trang|page) (?:moi(?: (?:co ten|ten))?|co ten|ten)) (?=\S)"
 )
 DONE_SHORT = re.compile(r"(?<=\bxong) r(?=[\s.!?]*$)")
 # "cho mình cái checklist …" asks for a block: it reads "thêm checklist …".
-GIVE_ME = re.compile(rf"^cho (?:minh|toi|em)(?: (?:cai|mot|them))? (?={KIND}\b)")
-TAIL = re.compile(
-    r"(?:[\s,]+(?:duoc khong|duoc ko|dc ko|dc khong|duoc chu|nhe ban|nhe|nha|giup (?:minh|toi)|"
-    r"gium(?: (?:minh|toi))?|please|pls|plz|thanks))+[\s.!?]*$"
-)
+GIVE_ME = re.compile(rf"^{LET_ME_WORDS}(?: (?:cai|mot|them))? (?={KIND}\b)")
+TAIL = re.compile(rf"(?:[\s,]+{pattern('tail')})+[\s.!?]*$")
 # "đi", "với", "nữa", "cảm ơn" also end content ("bữa trưa mang đi", "thiệp cảm ơn"):
 # dropped only when the sentence adds nothing ("xoá cái X đi", "giúp mình với").
-LOOSE_TAIL = re.compile(r"(?:[\s,]+(?:di|voi|nua|giup|cam on))+[\s.!?]*$")
+LOOSE = pattern("loose_tail")
+LOOSE_TAIL = re.compile(rf"(?:[\s,]+{LOOSE})+[\s.!?]*$")
 TARGET_BEFORE_TAIL = re.compile(
     r"\b(?:vao|o|trong|tai|tren|cua|cho|cuoi|dau)\s+(?:trang|page|bang|table)\s+[^,]+?"
-    r"(?=(?:[\s,]+(?:di|voi|nua|giup|cam on))+[\s.!?]*$)"
+    rf"(?=(?:[\s,]+{LOOSE})+[\s.!?]*$)"
 )
+TRAILING_WITH = re.compile(rf"[\s,]+{pattern('trailing_with')}[\s.!?]*$")
+LIST_MARK = re.compile(rf",|\s{pattern('list_joiners')}\s")
 INSERTS = re.compile(
-    r"^(?:them|chen|bo sung|ghi them|add|insert|append|cho (?:minh|toi|em)|minh can|toi can|tao|lam|create|make)\b"
+    rf"^(?:{INSERT_VERB}|{LET_ME_WORDS}|{pattern('want')}|"
+    rf"{pattern('verb_create_page', 'verb_create_page_en', 'verb_create_page_loose')})\b"
 )
 # P3 (kế hoạch sửa lỗi tạo trang): "làm cho mình cái trang …", "tạo giúp tôi một trang …".
-CREATE_PAGE = re.compile(r"^(?:tao|lam)(?: (?:giup|gium|cho))?(?: (?:minh|toi|em))?(?: (?:mot|cai))* (?=(?:trang|page)\b)")
-CREATE_START = re.compile(r"^(?:tao|create|make)(?: (?:mot|a|an|new))? (?:trang|page)\b")
+CREATE_PAGE = re.compile(
+    rf"^{pattern('verb_create_page', 'verb_create_page_loose')}(?: (?:giup|gium|cho))?(?: (?:minh|toi|em))?"
+    r"(?: (?:mot|cai))* (?=(?:trang|page)\b)"
+)
+CREATE_START = re.compile(rf"^{pattern('verb_create_page', 'verb_create_page_en')}(?: (?:mot|a|an|new))? (?:trang|page)\b")
+LIST_OPENER_LONG = re.compile(rf"\b{pattern('list_opener_long')}\b")
 # "xoá giúp mình …", "sửa giúp tôi …": the help words after the verb.
-HELP_AFTER_VERB = re.compile(rf"^({VERB}) (?:giup|gium)(?: (?:minh|toi))?(?= |:|,)")
+HELP_AFTER_VERB = re.compile(rf"^({VERB}) {pattern('help_after_verb')}(?= |:|,)")
 TICK_WORD = re.compile(r"(?:^|(?<=, ))(?:(?P<untick>untick|bo tick)|tick off|check off|tick)(?= )")
 # "xoá cái A đi": "cái" names nothing.
 THING_AFTER_VERB = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) cai ")
@@ -118,7 +123,7 @@ def _group(match: re.Match[str], folded: Folded, name: str | int) -> str:
 
 
 def _names_count(rest: str) -> int:
-    return len([part for part in re.split(r"\s*(?:,|\bva\b|\bvoi\b|\band\b)\s*", rest) if part.strip()])
+    return len([part for part in re.split(rf"\s*(?:,|\b{pattern('list_joiners')}\b)\s*", rest) if part.strip()])
 
 
 def normalize_instruction(instruction: str) -> str:
@@ -136,6 +141,9 @@ def normalize_instruction(instruction: str) -> str:
             text = _sub(text, TAIL, lambda m, f: "")
         if not INSERTS.match(Folded(text).value) or TARGET_BEFORE_TAIL.search(Folded(text).value):
             text = _sub(text, LOOSE_TAIL, lambda m, f: "")
+        trailing = TRAILING_WITH.search(Folded(text).value)
+        if trailing and LIST_MARK.search(Folded(text).value[:trailing.start()]):
+            text = _sub(text, TRAILING_WITH, lambda m, f: "")
     text = _sub(text, WANT, lambda m, f: "")
     text = _sub(text, LET_ME, lambda m, f: "")
     text = _sub(text, GIVE_PAGE, lambda m, f: "tạo trang ")
@@ -144,6 +152,8 @@ def normalize_instruction(instruction: str) -> str:
     text = _sub(text, GIVE_ME, lambda m, f: "thêm ")
     # Only "làm …" or help words change; a plain "Tạo trang" keeps its own words.
     text = _sub(text, CREATE_PAGE, lambda m, f: "tạo " if m.group(0) != "tao " else f.original(*m.span()))
+    if CREATE_START.match(Folded(text).value):
+        text = _sub(text, LIST_OPENER_LONG, lambda m, f: f.original(*m.span()).split()[0])
     text = _sub(text, HELP_AFTER_VERB, lambda m, f: _group(m, f, 1))
     text = _sub(text, THING_AFTER_VERB, lambda m, f: _group(m, f, 1) + " ")
     while TO_DO.search(Folded(text).value):
@@ -210,10 +220,26 @@ def normalize_edit_instruction(instruction: str) -> str:
     normalized = normalize_instruction(instruction)
     folded = Folded(normalized).value
     command = Folded(command_text(normalized)).value
-    return normalized if EDIT_START.match(folded) or EDIT_START.match(command) or CREATE_START.match(folded) else instruction
+    if EDIT_START.match(folded) or EDIT_START.match(command) or CREATE_START.match(folded):
+        return normalized
+    return strip_polite(instruction)
 
 
 def normalize_create_instruction(instruction: str) -> str:
     """For page composition: the normalized sentence only when it creates a Page (P3)."""
     normalized = normalize_instruction(instruction)
-    return normalized if CREATE_START.match(Folded(normalized).value) else instruction
+    return normalized if CREATE_START.match(Folded(normalized).value) else strip_polite(instruction)
+
+
+def strip_polite(instruction: str) -> str:
+    text, quoted = _hide(instruction.strip())
+    text = re.sub(r"\s+", " ", text)
+    previous = None
+    while previous != text:
+        previous = text
+        text = _sub(text, POLITE_LEAD, lambda m, f: "")
+        tail = TAIL.search(Folded(text).value)
+        if tail and "nhà" not in Folded(text).original(*tail.span()).casefold():
+            text = _sub(text, TAIL, lambda m, f: "")
+    stripped = _show(text.strip(), quoted)
+    return stripped if len(stripped.split()) > 1 else instruction
