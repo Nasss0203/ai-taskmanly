@@ -81,6 +81,24 @@ def writing_outcome(row: dict[str, Any], expect: dict[str, Any]) -> str:
     return DRAFT if row["failed"] else OK
 
 
+def writing_stage(row: dict[str, Any], expect: dict[str, Any]) -> str:
+    if row.get("error"):
+        return row["error"]
+    if expect.get("ask"):
+        return "nhap_khi_phai_hoi" if row["intent"] == "WRITING" and row.get("source") else "dung"
+    if row["intent"] != "WRITING":
+        return f"intent:{row['intent']}"
+    if row.get("action") != expect["action"]:
+        return "sai_lenh"
+    if expect.get("language") and row.get("language") != expect["language"]:
+        return "sai_ngon_ngu"
+    if row.get("source") is None:
+        return "khong_lay_duoc_chu"
+    if text_key(row["source"]) != text_key(expect["source"]):
+        return "sai_chu"
+    return "kiem_tra:" + ",".join(row["failed"]) if row["failed"] else "dung"
+
+
 def extra_failures(draft: dict[str, Any], expect: dict[str, Any]) -> list[str]:
     if "max_databases" in expect and len(draft.get("databases") or []) > expect["max_databases"]:
         return ["databases"]
@@ -148,6 +166,13 @@ def summarize(results: dict[str, list[dict[str, Any]]], hide_sentences: bool) ->
     for name, rows in results.items():
         groups = {group: _count([row for row in rows if row["group"] == group]) for group in sorted({r["group"] for r in rows})}
         entry: dict[str, Any] = {"total": _count(rows), "groups": groups}
+        stages: dict[str, Counter] = {}
+        for row in rows:
+            stage = row["attempts"][-1].get("stage")
+            if stage and row["outcome"] != OK:
+                stages.setdefault(row["group"], Counter())[stage] += 1
+        if stages:
+            entry["stages"] = {group: dict(counts) for group, counts in sorted(stages.items())}
         if not hide_sentences:
             entry["unstable"] = [row["id"] for row in rows if not row["stable"]]
             entry["problems"] = [{key: row[key] for key in ("id", "group", "outcome", "outcomes", "instruction")}
@@ -263,6 +288,7 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
                     row["usedModel"] = True
                     row["error"] = error_stop(exc)
             row["outcome"] = writing_outcome(row, expect)
+            row["stage"] = writing_stage(row, expect)
         return rows
 
     return once
@@ -320,6 +346,9 @@ def _print_report(summary: dict[str, Any], split: str) -> None:
         line(name.upper(), entry["total"])
         for group, counts in entry["groups"].items():
             line(f"  {group}", counts)
+    for name, entry in summary.items():
+        for group, counts in entry.get("stages", {}).items():
+            print(f"{name} {group} dừng ở: " + ", ".join(f"{stage} {count}" for stage, count in sorted(counts.items())))
     for name, entry in summary.items():
         for problem in entry.get("problems", []):
             print(f"{problem['id']} {problem['outcome']} {problem['outcomes']} {problem['last']} | {problem['instruction']}")

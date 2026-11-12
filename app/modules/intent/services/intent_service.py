@@ -8,12 +8,12 @@ from app.llm.base import LLMProvider
 from app.modules.intent.prompts.intent_prompt import build_intent_prompt
 from app.modules.intent.schemas.intent_schema import IntentExtraction, IntentRequest, IntentResponse, IntentResult
 from app.modules.intent.services.intent_rules import (
-    creation_evidence, deterministic_result, directive_text, edit_evidence,
+    PAGE_WORD, creation_evidence, deterministic_result, directive_text, edit_evidence,
     inline_source, is_page_summary, is_read_only, multiple_commands, result,
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
-    PAGE_MARKER, content_page_reference, detect_page_reference,
+    content_page_reference, detect_page_reference,
 )
 from app.shared.json_parser import parse_json_object
 
@@ -76,7 +76,9 @@ class IntentService:
         # request but edits the Page it finds.
         if classification.intent == 'MODIFY_PAGE' and content_page_reference(source) is not None:
             return result('MODIFY_PAGE')
-        if is_read_only(source) or is_page_summary(source) or unsupported_request(source):
+        selected = bool(request.selectedText)
+        reads_selection = selected and writing_action(source, selected=True) is not None
+        if (is_read_only(source) and not reads_selection) or is_page_summary(source) or unsupported_request(source):
             return result('OTHER')
         if classification.intent in ('OTHER', 'UNCLEAR'):
             # A model's conservative answer must not be promoted to mutation.
@@ -86,8 +88,8 @@ class IntentService:
         if classification.intent == 'MODIFY_PAGE':
             if creation_evidence(source) or not edit_evidence(request):
                 return result('UNCLEAR')
-            action = writing_action(source)
-            has_page = bool(PAGE_MARKER.search(directive_text(source)))
+            action = writing_action(source, selected=selected)
+            has_page = bool(PAGE_WORD.search(directive_text(source)))
             if action and not has_page and (request.selectedText or inline_source(source)):
                 return result('UNCLEAR')
             if not has_page and not request.currentPageId:
@@ -95,10 +97,10 @@ class IntentService:
             evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
             return result('MODIFY_PAGE', clarify=evidence.reference_type == 'UNRESOLVED'
                           or evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId)
-        action = writing_action(source, soft=True)
+        action = writing_action(source, soft=True, selected=selected)
         if (action != classification.writingAction
                 or not (request.selectedText or inline_source(source))
-                or PAGE_MARKER.search(directive_text(source))):
+                or PAGE_WORD.search(directive_text(source))):
             return result('UNCLEAR')
         if action == 'TRANSLATE':
             language = translation_language(source)

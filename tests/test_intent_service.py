@@ -89,7 +89,7 @@ def test_ambiguous_creation_uses_structured_llm_without_context_id():
 
 
 def test_llm_can_classify_soft_writing_evidence():
-    response, provider = run('Nội dung đang chọn cần mượt mà hơn',
+    response, provider = run('This selection should be more fluent',
                              [json.dumps(extraction('WRITING', 'IMPROVE'))], selectedText='Source')
     assert response.result.writingAction == 'IMPROVE'
     assert len(provider.calls) == 1
@@ -288,8 +288,8 @@ def test_json_id_injection_is_not_mistaken_for_a_second_page_target():
 
 @pytest.mark.parametrize('source,context,generated', [
     ('Mình cần một trang để theo dõi chi phí dự án', {}, extraction('MODIFY_PAGE')),
-    ('Nội dung đang chọn cần mượt mà hơn', {'selectedText': 'Source'}, extraction('CREATE_PAGE')),
-    ('Nội dung đang chọn cần mượt mà hơn', {'selectedText': 'Source'}, extraction('WRITING', 'SHORTEN')),
+    ('This selection should be more fluent', {'selectedText': 'Source'}, extraction('CREATE_PAGE')),
+    ('This selection should be more fluent', {'selectedText': 'Source'}, extraction('WRITING', 'SHORTEN')),
     ('Một câu chưa xác định', {'currentPageId': 'caller'}, extraction('MODIFY_PAGE')),
 ])
 def test_llm_pipeline_rejects_unsupported_source_inferences(source, context, generated):

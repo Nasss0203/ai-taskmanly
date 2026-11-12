@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import re
+from collections import Counter
 from types import SimpleNamespace
 
 import pytest
@@ -29,6 +30,7 @@ from scripts.evaluate_natural_vi import (
     question_outcome,
     summarize,
     writing_outcome,
+    writing_stage,
 )
 
 MARKS = re.compile(r"[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]", re.IGNORECASE)
@@ -80,14 +82,103 @@ def test_inline_writing_sentence_carries_its_source() -> None:
     assert all(not case.get("selectedText") and case["expect"]["source"] in case["instruction"] for case in inline)
 
 
+PLACE_START = re.compile(r"^(?:ở|trong|trang|tại) ")
+WANT_START = re.compile(r"^(?:mình muốn|mình cần|bạn|nhờ bạn|cho mình|giúp mình|phiền bạn)\b")
+COMMAND_VERB = re.compile(r"^(?:thêm|ghi|tạo|lập|làm|xoá|xóa|sửa|đổi|thay|tích|đánh dấu|bỏ|hoàn thành|chèn|nhớ)\b")
+
+
+def way_of_saying(form: str) -> str:
+    if WANT_START.match(form):
+        return "want"
+    if PLACE_START.match(form):
+        return "place"
+    if COMMAND_VERB.match(form):
+        return "verb"
+    return "content"
+
+
+def test_dev_groups_have_enough_forms() -> None:
+    modify, compose, writing, question = (DEV_BANK[name] for name in ("modify", "compose", "writing", "question"))
+    forms = modify["forms"]
+    for group in ("add_todo", "add_heading", "add_text", "section", "tick", "edit", "delete"):
+        assert len(forms[group]) >= 10, group
+    assert len(forms["checklist"]) + len(forms["checklist_two"]) >= 10
+    assert len(modify["untick"]["sentences"]) >= 10
+    rows = sum(len(modify["db_rows"][kind]) for kind in ("one", "status", "two")) + len(modify["db_other"]["one"])
+    assert rows >= 12
+    assert len(modify["refuse"]) >= 12 and len(modify["ask"]) >= 10
+    for group in ("items", "sections", "table", "bare"):
+        assert len(compose["forms"][group]) >= 10, group
+    for group in ("table_options", "purpose"):
+        assert len(compose["forms"][group]) >= 6, group
+    assert len(compose["refuse"]) >= 8
+    assert command_count(DEV_BANK) >= 120 and len(writing["inline_forms"]) >= 16 and len(writing["ask"]) >= 14
+    assert all(len(entry["forms"]) >= 10 for entry in question["status"])
+    assert len(question["summary"]["forms"]) >= 10
+    assert len(question["counts"]["items"]) >= 20 and len(question["facts"]) >= 20
+    assert len(question["missing"]) >= 8
+    assert len(question["modify_checks"]) >= 20 and len(question["other_checks"]) >= 10
+
+
+@pytest.mark.parametrize("group", ["add_todo", "add_heading", "add_text", "checklist", "section", "tick", "edit",
+                                   "delete"])
+def test_every_modify_group_has_each_way_of_saying(group: str) -> None:
+    ways = {way_of_saying(form) for form in DEV_BANK["modify"]["forms"][group]}
+    assert ways == {"verb", "place", "content", "want"}
+
+
+@pytest.mark.parametrize("group", ["items", "sections", "table", "bare", "purpose"])
+def test_every_compose_group_has_verb_and_request_forms(group: str) -> None:
+    ways = {way_of_saying(form) for form in DEV_BANK["compose"]["forms"][group]}
+    assert {"verb", "want"} <= ways
+
+
+def test_writing_commands_come_in_every_way() -> None:
+    ways = {way_of_saying(form) for entry in DEV_BANK["writing"]["actions"] for form in entry["forms"]}
+    assert {"verb", "want", "content"} <= ways
+
+
+def test_group_sizes_stay_the_same() -> None:
+    sets = generate(DEV_BANK, DEV_SEED)
+    sizes = {name: Counter(case["group"] for case in cases) for name, cases in sets.items()}
+    assert sizes["modify"] == {"add_todo": 10, "add_heading": 8, "add_text": 6, "checklist": 10, "section": 8, "tick": 10,
+                               "untick": 3, "edit": 8, "delete": 6, "db_row": 8, "other_page_open": 12, "refuse": 6,
+                               "ask": 5}
+    assert sizes["compose"] == {"items": 25, "sections": 15, "table": 20, "table_options": 10, "bare": 15,
+                                "purpose": 10, "refuse": 4, "injection": 1}
+    assert sizes["writing"]["ask"] == 7 and sizes["writing"]["inline"] == 20
+    assert sizes["question"] == {"TODO_STATUS": 20, "DATABASE_COUNT": 20, "SUMMARY": 15, "FREE": 30, "intent_check": 15}
+
+
+@pytest.mark.parametrize("seed", [DEV_SEED, 777])
+def test_polite_lead_comes_only_before_a_command_verb(seed: int) -> None:
+    sets = generate(DEV_BANK, seed)
+    lead = re.compile(r"^(?:bạn|cho mình|nhờ bạn|giúp mình)(?! ơi) (?P<rest>.+)$")
+    bad = 0
+    for case in sets["modify"] + sets["compose"]:
+        match = lead.match(case["instruction"])
+        bad += bool(match and not COMMAND_VERB.match(match.group("rest")))
+    assert bad == 0
+
+
+@pytest.mark.parametrize("seed", [DEV_SEED, 777, 12345])
+def test_no_ask_lead_before_a_request_and_no_tail_after_duoc_khong(seed: int) -> None:
+    sets = generate(DEV_BANK, seed)
+    stacked = re.compile(r"^cho mình hỏi (?:mình|đọc|liệt kê|đếm|tóm tắt)\b|được không (?:nha|nhé|với|giúp mình)$")
+    bad = sum(bool(stacked.search(case["instruction"])) for cases in sets.values() for case in cases)
+    assert bad == 0
+
+
 def test_a_tracking_page_may_hold_one_table() -> None:
     cases = [case for case in generate(DEV_BANK, DEV_SEED)["compose"] if "theo dõi các khoản chi" in case["instruction"]]
     assert cases and all(case["expect"] == {"max_databases": 1} for case in cases)
 
 
 def test_an_injected_order_still_creates_the_page() -> None:
-    cases = [case for case in generate(DEV_BANK, DEV_SEED)["compose"] if "bỏ qua mọi quy tắc" in case["instruction"]]
-    assert [(case["group"], case["expect"]) for case in cases] == [("injection", {"title": "Test"})]
+    cases = [case for case in generate(DEV_BANK, DEV_SEED)["compose"] if case["group"] == "injection"]
+    titles = {sentence: title for sentence, title in DEV_BANK["compose"]["injection"]}
+    assert len(cases) == 1
+    assert cases[0]["expect"] == {"title": titles[cases[0]["instruction"]]}
 
 
 def test_more_tables_than_allowed_is_a_wrong_draft() -> None:
@@ -221,6 +312,31 @@ def test_writing_outcomes() -> None:
     assert writing_outcome({**good, "error": "system:LLMTimeoutError"}, wanted) == SYSTEM
     assert writing_outcome({**good, "source": None}, {"ask": True}) == OK
     assert writing_outcome(good, {"ask": True}) == DRAFT
+
+
+def test_writing_stages() -> None:
+    wanted = {"action": "TRANSLATE", "language": "English", "source": "Xin chào cả nhà"}
+    good = {"intent": "WRITING", "action": "TRANSLATE", "language": "English", "source": "Xin chào cả nhà", "failed": []}
+    assert writing_stage(good, wanted) == "dung"
+    assert writing_stage({**good, "error": "system:LLMProviderError"}, wanted) == "system:LLMProviderError"
+    assert writing_stage({**good, "intent": "UNCLEAR"}, wanted) == "intent:UNCLEAR"
+    assert writing_stage({**good, "action": "SHORTEN"}, wanted) == "sai_lenh"
+    assert writing_stage({**good, "language": "Korean"}, wanted) == "sai_ngon_ngu"
+    assert writing_stage({**good, "source": None}, wanted) == "khong_lay_duoc_chu"
+    assert writing_stage({**good, "source": "cả nhà"}, wanted) == "sai_chu"
+    assert writing_stage({**good, "failed": ["copied"]}, wanted) == "kiem_tra:copied"
+    assert writing_stage(good, {"ask": True}) == "nhap_khi_phai_hoi"
+    assert writing_stage({**good, "source": None}, {"ask": True}) == "dung"
+
+
+def test_summary_counts_stages_without_sentences() -> None:
+    rows = [{"id": "h2", "group": "CONTINUE", "instruction": SECRET_SENTENCE, "outcome": SYSTEM, "stable": True,
+             "allOk": False, "runs": 3, "attempts": [{"stage": "system:LLMProviderError"}]},
+            {"id": "h3", "group": "CONTINUE", "instruction": SECRET_SENTENCE, "outcome": OK, "stable": True,
+             "allOk": True, "runs": 3, "attempts": [{"stage": "dung"}]}]
+    summary = summarize({"writing": rows}, hide_sentences=True)
+    assert summary["writing"]["stages"] == {"CONTINUE": {"system:LLMProviderError": 1}}
+    assert SECRET_SENTENCE not in str(summary) and "h2" not in str(summary)
 
 
 def test_question_outcomes() -> None:

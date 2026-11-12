@@ -48,6 +48,134 @@
     {
       "input": "tóm tắt giúp mình hôm nay nhóm đã hoàn thành kiểm thử đăng nhập và sửa ba lỗi giao diện",
       "text": "hôm nay nhóm đã hoàn thành kiểm thử đăng nhập và sửa ba lỗi giao diện"
+    },
+    {
+      "input": "tóm tắt Dự án chậm một tuần vì thiếu người",
+      "text": "Dự án chậm một tuần vì thiếu người"
+    },
+    {
+      "input": "tóm tắt khách hàng rất vui",
+      "text": "khách hàng rất vui"
+    },
+    {
+      "input": "tóm tắt hôm nay nha",
+      "text": null
+    },
+    {
+      "input": "tóm tắt giúp mình nhóm mình cần thêm hai người để kịp tiến độ",
+      "text": "nhóm mình cần thêm hai người để kịp tiến độ"
+    },
+    {
+      "input": "sửa lỗi chính tả Khách hàng rất hài lòng với bản demo",
+      "text": "Khách hàng rất hài lòng với bản demo"
+    },
+    {
+      "input": "viết ngắn lại nhóm mình cần thêm hai người để kịp tiến độ",
+      "text": "nhóm mình cần thêm hai người để kịp tiến độ"
+    },
+    {
+      "input": "viết dài hơn câu Khách hàng rất hài lòng với bản demo",
+      "text": "Khách hàng rất hài lòng với bản demo"
+    },
+    {
+      "input": "bạn dịch câu Khách hàng rất hài lòng với bản demo sang tiếng Anh",
+      "text": "Khách hàng rất hài lòng với bản demo"
+    },
+    {
+      "input": "sản phẩm mới bán khá chạy trong tháng đầu tiên, dịch sang tiếng Anh giúp mình",
+      "text": "sản phẩm mới bán khá chạy trong tháng đầu tiên"
+    },
+    {
+      "input": "viết lại cuộc họp sáng nay kết thúc sớm, mọi người về làm việc tiếp cho lịch sự hơn",
+      "text": "cuộc họp sáng nay kết thúc sớm, mọi người về làm việc tiếp"
+    },
+    {
+      "input": "viết lại cho hay hơn câu cuộc họp sáng nay kết thúc sớm, mọi người về làm việc tiếp",
+      "text": "cuộc họp sáng nay kết thúc sớm, mọi người về làm việc tiếp"
+    },
+    {
+      "input": "viết lại Khách hàng rất hài lòng với bản demo cho lịch sự hơn",
+      "text": "Khách hàng rất hài lòng với bản demo"
+    },
+    {
+      "input": "sửa giúp mình câu Dự án chậm một tuần vì thiếu người cho lịch sự hơn",
+      "text": null
+    },
+    {
+      "input": "rút gọn đoạn này",
+      "text": null
+    },
+    {
+      "input": "tóm tắt cho ngắn gọn",
+      "text": null
+    },
+    {
+      "input": "dịch giúp mình nội dung này sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch văn bản này sang tiếng Nhật",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn bên dưới sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch giùm tôi đoạn dưới đây sang tiếng Pháp",
+      "text": null
+    },
+    {
+      "input": "viết tiếp đoạn văn bên dưới cho mình",
+      "text": null
+    },
+    {
+      "input": "mở rộng ý của đoạn trên",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn trên sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "tóm tắt nội dung bên dưới giúp mình",
+      "text": null
+    },
+    {
+      "input": "viết lại đoạn văn phía trên cho mượt hơn",
+      "text": null
+    },
+    {
+      "input": "rút gọn văn bản sau đây giúp mình",
+      "text": null
+    },
+    {
+      "input": "dịch phần còn lại sang tiếng Hàn",
+      "text": null
+    },
+    {
+      "input": "viết tiếp phần còn lại của bài này",
+      "text": null
+    },
+    {
+      "input": "mở rộng nội dung của đoạn đó",
+      "text": null
+    },
+    {
+      "input": "sửa lỗi chính tả trong văn bản này giúp mình",
+      "text": null
+    },
+    {
+      "input": "tóm tắt giúp mình ý chính của bài trên",
+      "text": null
+    },
+    {
+      "input": "dịch câu bên dưới sang tiếng Trung giúp mình",
+      "text": null
+    },
+    {
+      "input": "dịch sang tiếng Anh cảm ơn anh vì buổi họp này đã kết thúc sớm",
+      "text": "cảm ơn anh vì buổi họp này đã kết thúc sớm"
     }
   ]
 }

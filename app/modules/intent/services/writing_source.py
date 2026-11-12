@@ -14,10 +14,14 @@ import unicodedata
 from app.shared.vi_vocabulary import words
 
 LEAD = tuple(words("lead", "lead_short", "let_me"))
-ACTIONS = ("tom tat", "viet lai", "viet tiep", "rut gon", "mo rong", "dich", "translate", "summarize", "shorten",
-           "rewrite", "expand", "continue", "paraphrase", "improve")
-FILLER = tuple(words("help_after_verb")) + ("doan nay", "cau nay", "cai nay", "doan sau", "cau sau", "doan van nay",
-                                           "this", "it", "lai", "nay")
+ACTIONS = tuple(words("write_translate", "write_improve", "write_shorten", "write_expand", "write_summarize",
+                      "write_continue"))
+PASSAGE = tuple(words("write_passage"))
+PASSAGE_HEAD = tuple(words("write_passage_head"))
+PASSAGE_POINTER = tuple(words("write_passage_pointer"))
+FILLER = tuple(words("help_after_verb", "write_passage", "inline_lead_filler")) + ("this", "it", "lai", "nay")
+STYLE_WORDS = tuple(words("write_style_improve", "write_style_shorten", "write_style_expand"))
+LANGUAGE_BEFORE = tuple(words("language_prep", "language_noun"))
 LANGUAGES = ("tieng tay ban nha", "tieng anh", "tieng viet", "tieng nhat", "tieng han", "tieng phap", "tieng duc",
              "tieng trung", "english", "vietnamese", "japanese", "korean", "french", "german", "chinese", "spanish")
 TAIL = tuple(words("tail", "trailing_with"))
@@ -26,6 +30,7 @@ TAIL = tuple(words("tail", "trailing_with"))
 # hơn"), so only a real passage counts.
 MIN_WORDS = {"dich": 2, "translate": 2}
 MIN_PASSAGE_WORDS = 8
+SHORT_PASSAGE_WORDS = 4
 
 
 def _fold(word: str) -> str:
@@ -53,10 +58,71 @@ def _ends(folded: list[str], end: int, phrases: tuple[str, ...]) -> int:
 
 def _language_at(folded: list[str], at: int) -> int:
     """ "sang tiếng Anh", "to English", "into Vietnamese" at ``at``."""
-    if at < len(folded) and folded[at] in ("sang", "to", "into", "qua"):
-        size = _starts(folded, at + 1, LANGUAGES)
-        return size + 1 if size else 0
+    before = _starts(folded, at, LANGUAGE_BEFORE) if at < len(folded) else 0
+    if before:
+        size = _starts(folded, at + before, LANGUAGES)
+        return size + before if size else 0
     return 0
+
+
+def _style_at(folded: list[str], at: int) -> int:
+    if at >= len(folded) or folded[at] != "cho":
+        return 0
+    size = _starts(folded, at + 1, STYLE_WORDS)
+    if not size:
+        return 0
+    return size + 1 + (folded[at + size + 1:at + size + 2] == ["hon"])
+
+
+def _trim(folded: list[str], start: int, end: int) -> tuple[int, int, bool]:
+    styled, changed = False, True
+    while changed:
+        changed = False
+        for size in (_starts(folded, start, FILLER), _language_at(folded, start), _style_at(folded, start)):
+            if size:
+                styled = styled or bool(_style_at(folded, start))
+                start, changed = start + size, True
+                break
+        else:
+            for size in (_ends(folded, end, TAIL),):
+                if size and end - size >= start:
+                    end, changed = end - size, True
+            for back in range(2, 6):
+                if end - back >= start and (_language_at(folded, end - back) == back or _style_at(folded, end - back) == back):
+                    styled = styled or _style_at(folded, end - back) == back
+                    end, changed = end - back, True
+                    break
+    return start, end, styled
+
+
+def _points_at_passage(folded: list[str], start: int, end: int) -> bool:
+    for index in range(min(end, len(folded))):
+        head = _starts(folded, index, PASSAGE_HEAD)
+        if head and _starts(folded, index + head, PASSAGE_POINTER) and index + head + 1 > start:
+            return True
+    return False
+
+
+def _passage(words: list[str], folded: list[str], start: int, end: int, verb: str, styled: bool) -> str | None:
+    if any(_starts(folded, index, PASSAGE) for index in range(start, end)) or _points_at_passage(folded, start, end):
+        return None
+    if end - start < MIN_WORDS.get(verb, MIN_PASSAGE_WORDS if styled else SHORT_PASSAGE_WORDS):
+        return None
+    return " ".join(words[start:end]).strip(" :,.") or None
+
+
+def _text_before_command(words: list[str], folded: list[str], start: int) -> str | None:
+    for index in range(len(words) - 1, start, -1):
+        if not words[index - 1].endswith(","):
+            continue
+        action = _starts(folded, index, ACTIONS)
+        if not action:
+            continue
+        rest_start, rest_end, _ = _trim(folded, index + action, len(words))
+        if rest_start < rest_end:
+            return None
+        return _passage(words, folded, start, index, " ".join(folded[index:index + action]), False)
+    return None
 
 
 def inline_writing_text(instruction: str) -> str | None:
@@ -68,26 +134,7 @@ def inline_writing_text(instruction: str) -> str | None:
         start += size
     action = _starts(folded, start, ACTIONS)
     if not action:
-        return None
+        return _text_before_command(words, folded, start)
     verb = " ".join(folded[start:start + action])
-    start += action
-    end = len(words)
-    changed = True
-    while changed:
-        changed = False
-        for size in (_starts(folded, start, FILLER), _language_at(folded, start)):
-            if size:
-                start, changed = start + size, True
-                break
-        else:
-            for size in (_ends(folded, end, TAIL),):
-                if size and end - size >= start:
-                    end, changed = end - size, True
-            for back in range(2, 6):
-                if end - back > start and _language_at(folded, end - back) == back:
-                    end, changed = end - back, True
-                    break
-    text = words[start:end]
-    if len(text) < MIN_WORDS.get(verb, MIN_PASSAGE_WORDS):
-        return None
-    return " ".join(text).strip(" :,.") or None
+    start, end, styled = _trim(folded, start + action, len(words))
+    return _passage(words, folded, start, end, verb, styled)

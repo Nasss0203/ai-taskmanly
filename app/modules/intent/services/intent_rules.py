@@ -3,7 +3,7 @@
 import re
 import unicodedata
 
-from app.shared.vi_vocabulary import pattern
+from app.shared.vi_vocabulary import pattern, words
 from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
 from app.modules.intent.services.page_question_rules import page_question
@@ -17,7 +17,8 @@ from app.modules.page_intent.services.page_reference_evidence import (
 )
 
 
-PAGE_WORD = re.compile(r'(?<!\w)(?<!tinh )(?:page|trang)(?!\w)(?!\s+thai\b)', re.IGNORECASE)
+PAGE_WORD = re.compile(r'(?<!\w)(?<!tinh )(?:page|trang)(?!\w)(?!\s+thai\b)(?!\s+trong(?:\s+hon\b|\s*(?:[,.!?]|$)))',
+                       re.IGNORECASE)
 
 
 def fold(text: str) -> str:
@@ -50,15 +51,28 @@ def command_text(source: str) -> str:
 
 
 ACTION_PATTERNS: tuple[tuple[WritingActionName, str], ...] = (
-    ('IMPROVE', r'viet lai|sua cau|sua loi chinh ta|viet chuyen nghiep hon|kiem tra ngu phap|make (?:it|this) more formal|paraphrase|rewrite|improve'
-                r'|viet (?:cho )?hay hon|sua cho muot'),
-    ('SHORTEN', r'rut gon|viet ngan lai|ngan gon|make (?:it|this) shorter|shorten'),
-    # Kế hoạch sửa tính năng viết (V1): "mở rộng thêm ý", "viết dài ra".
-    ('EXPAND', r'viet dai hon|viet dai ra|chi tiet hon|them vi du minh hoa cho doan nay|elaborate|expand|mo rong'),
-    ('SUMMARIZE', r'tom tat|tom lai y chinh|tl;dr|liet ke \d+ y chinh|summarize'),
-    ('CONTINUE', r'viet tiep|continue'),
-    ('TRANSLATE', r'dich(?!\s+vu\b)|translate|sang tieng|(?:english|japanese|korean|vietnamese|french) please'),
+    ('IMPROVE', rf'{pattern("write_improve")}|make (?:it|this) more formal'),
+    ('SHORTEN', rf'{pattern("write_shorten")}|make (?:it|this) shorter'),
+    ('EXPAND', rf'{pattern("write_expand")}|them vi du minh hoa cho doan nay'),
+    ('SUMMARIZE', rf'{pattern("write_summarize")}|tl;dr|liet ke \d+ y chinh'),
+    ('CONTINUE', pattern("write_continue")),
+    ('TRANSLATE', rf'(?:{pattern("write_translate")})(?!\s+vu\b)|sang tieng|(?:english|japanese|korean|vietnamese|french) please'),
 )
+ACTION_REGEXES = tuple((action, re.compile(rf'^(?:{regex})\b')) for action, regex in ACTION_PATTERNS)
+STYLE_OF = {word: action for action, group in (('IMPROVE', 'write_style_improve'), ('SHORTEN', 'write_style_shorten'),
+                                               ('EXPAND', 'write_style_expand')) for word in words(group)}
+STYLES = pattern('write_style_improve', 'write_style_shorten', 'write_style_expand')
+STYLE = re.compile(rf'\b(?:cho\s+(?P<after>{STYLES})|(?P<before>{STYLES})\s+hon)\b')
+POINTED = rf'(?:{pattern("write_passage")}|{pattern("write_passage_head")}\s+{pattern("write_passage_pointer")})'
+PASSAGE = re.compile(rf'\b{POINTED}\b')
+PASSAGE_LEAD = re.compile(rf'^(?:{POINTED}|{pattern("write_before_verb")})\s*,?\s+')
+GENERIC_FIX = re.compile(rf'^{pattern("write_generic_fix")}\b')
+GENERIC_MAKE = re.compile(rf'^{pattern("write_generic_make")}\b')
+CONVERT = re.compile(rf'^{pattern("write_convert")}\b')
+LANGUAGE_BEFORE = pattern('language_prep', 'language_noun')
+WANT_LEAD = re.compile(rf'^(?:{pattern("want", "let_me")}\s+)+')
+SHORT_LEAD = re.compile(rf'^{pattern("lead_short")}\s+')
+RESTYLED_VERBS = {'viet lai', *words('write_generic_fix'), *words('write_generic_make')}
 EDIT_COMMAND = re.compile(
     r'^(?:them|chen|sua|chinh|cap nhat|doi|xoa|bo sung|ghi|viet lai|rut gon|dich|chep|'
     r'add|insert|edit|update|remove|delete|modify|change|replace|rename|append|prepend|move|reorder|rewrite|shorten|translate|copy|'
@@ -82,11 +96,55 @@ LANGUAGES = {
 }
 
 
-def writing_action(source: str, *, soft: bool = False) -> WritingActionName | None:
+def _style(text: str) -> WritingActionName | None:
+    found = STYLE.search(text)
+    if found is None:
+        return None
+    return STYLE_OF[re.sub(r'\s+', ' ', found.group('after') or found.group('before'))]
+
+
+def _language_named(text: str) -> bool:
+    aliases = '|'.join(alias for names in LANGUAGES.values() for alias in names)
+    return bool(re.search(rf'\b{LANGUAGE_BEFORE}\s+(?:{aliases})\b', text))
+
+
+def _verb_action(text: str) -> tuple[WritingActionName, str] | None:
+    best = None
+    for action, regex in ACTION_REGEXES:
+        found = regex.match(text)
+        if found and (best is None or found.end() > len(best[1])):
+            best = (action, found.group())
+    return best
+
+
+def writing_action(source: str, *, soft: bool = False, selected: bool = False) -> WritingActionName | None:
     text = command_text(source)
-    for action, pattern in ACTION_PATTERNS:
-        if re.match(rf'^(?:{pattern})\b', text):
+    style, language = _style(text), _language_named(text)
+    passage = selected or bool(PASSAGE.search(text))
+    asked = WANT_LEAD.sub('', text)
+    unled = SHORT_LEAD.sub('', asked)
+    candidates = [text, asked, unled, PASSAGE_LEAD.sub('', PASSAGE_LEAD.sub('', unled))]
+    if ',' in text:
+        candidates.append(command_text(text.rsplit(',', 1)[1]))
+    for candidate in candidates:
+        found = _verb_action(candidate)
+        if found:
+            action, verb = found
+            if verb in RESTYLED_VERBS and language:
+                return 'TRANSLATE'
+            if verb in RESTYLED_VERBS and style:
+                return style
             return action
+        if CONVERT.match(candidate) and language:
+            return 'TRANSLATE'
+        if GENERIC_FIX.match(candidate) and (style or passage):
+            return 'TRANSLATE' if language else style or 'IMPROVE'
+        if GENERIC_MAKE.match(candidate) and style:
+            return style
+    if language and re.match(rf'^{pattern("language_noun")}\s', asked):
+        return 'TRANSLATE'
+    if style and passage:
+        return style
     if soft and re.search(r'\b(?:muot ma hon|trang trong hon|more formal|more fluent)\b', text):
         return 'IMPROVE'
     return None
@@ -119,7 +177,7 @@ def translation_language(source: str) -> str | None:
     text = directive_text(source)
     for canonical, aliases in LANGUAGES.items():
         for alias in aliases:
-            if re.search(rf'\b(?:sang\s+|to\s+){alias}\b', text) or re.fullmatch(rf'{alias}\s+please[.!?]*', text):
+            if re.search(rf'\b{LANGUAGE_BEFORE}\s+{alias}\b', text) or re.fullmatch(rf'{alias}\s+please[.!?]*', text):
                 return canonical
     return None
 
@@ -256,7 +314,8 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
                 intent='PAGE_QUESTION', questionKind=question.kind,
                 pageReference=question.page_reference, databaseReference=question.database_reference,
             )
-    if is_page_summary(source) or is_read_only(source) or unsupported_request(source):
+    reads_selection = bool(request.selectedText) and writing_action(source, selected=True) is not None
+    if is_page_summary(source) or unsupported_request(source) or (is_read_only(source) and not reads_selection):
         return result('OTHER')
     text = directive_text(source)
     has_page = bool(PAGE_WORD.search(text))
@@ -267,7 +326,7 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
         return result('MODIFY_PAGE', clarify=missing_current or evidence.reference_type == 'UNRESOLVED')
     if creation_evidence(source) and CREATE_COMMAND.match(text):
         return result('CREATE_PAGE')
-    action = writing_action(source)
+    action = writing_action(source, selected=bool(request.selectedText))
     if has_page and edit_evidence(request):
         evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
         missing_current = evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId
