@@ -176,6 +176,110 @@
     {
       "input": "dịch sang tiếng Anh cảm ơn anh vì buổi họp này đã kết thúc sớm",
       "text": "cảm ơn anh vì buổi họp này đã kết thúc sớm"
+    },
+    {
+      "input": "dịch hộ mình sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch dùm mình ra tiếng Nhật",
+      "text": null
+    },
+    {
+      "input": "dịch cho mình bằng tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch nội dung sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn văn bản ra tiếng Nhật",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn mình chọn sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch phần mình bôi đen bằng tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch nội dung mình gửi sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "dịch văn bản mình dán ra tiếng Nhật",
+      "text": null
+    },
+    {
+      "input": "dịch đoạn văn đã chọn sang tiếng Anh",
+      "text": null
+    },
+    {
+      "input": "tóm tắt hộ mình một chút",
+      "text": null
+    },
+    {
+      "input": "tóm tắt cho mình ngắn thôi",
+      "text": null
+    },
+    {
+      "input": "tóm tắt nội dung cho mình với",
+      "text": null
+    },
+    {
+      "input": "tóm tắt phần mình bôi đen",
+      "text": null
+    },
+    {
+      "input": "tóm tắt đoạn đang chọn một chút",
+      "text": null
+    },
+    {
+      "input": "viết lại dùm mình cho mình với",
+      "text": null
+    },
+    {
+      "input": "viết lại văn bản mình dán nhé",
+      "text": null
+    },
+    {
+      "input": "rút gọn nội dung mình gửi lại",
+      "text": null
+    },
+    {
+      "input": "rút gọn đoạn văn bản ngắn thôi",
+      "text": null
+    },
+    {
+      "input": "mở rộng phần mình bôi đen thêm",
+      "text": null
+    },
+    {
+      "input": "mở rộng đoạn mình chọn một chút",
+      "text": null
+    },
+    {
+      "input": "viết tiếp văn bản mình dán nha",
+      "text": null
+    },
+    {
+      "input": "viết tiếp nội dung mình gửi được không",
+      "text": null
+    },
+    {
+      "input": "sửa lỗi chính tả phần mình bôi đen",
+      "text": null
+    },
+    {
+      "input": "trau chuốt nội dung mình gửi cho chuyên nghiệp hơn nhé",
+      "text": null
+    },
+    {
+      "input": "tóm tắt Dự án chậm tiến độ một chút",
+      "text": "Dự án chậm tiến độ một chút"
     }
   ]
 }

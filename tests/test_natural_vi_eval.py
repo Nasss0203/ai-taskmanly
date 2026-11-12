@@ -319,6 +319,10 @@ def test_writing_stages() -> None:
     good = {"intent": "WRITING", "action": "TRANSLATE", "language": "English", "source": "Xin chào cả nhà", "failed": []}
     assert writing_stage(good, wanted) == "dung"
     assert writing_stage({**good, "error": "system:LLMProviderError"}, wanted) == "system:LLMProviderError"
+    assert writing_stage({**good, "error": "system:InvalidLLMResponseError", "errorAt": "intent"},
+                         wanted) == "intent:system:InvalidLLMResponseError"
+    assert writing_stage({**good, "error": "system:InvalidLLMResponseError", "errorAt": "viet",
+                          "errorKind": "model_tra_rong"}, wanted) == "viet:system:InvalidLLMResponseError:model_tra_rong"
     assert writing_stage({**good, "intent": "UNCLEAR"}, wanted) == "intent:UNCLEAR"
     assert writing_stage({**good, "action": "SHORTEN"}, wanted) == "sai_lenh"
     assert writing_stage({**good, "language": "Korean"}, wanted) == "sai_ngon_ngu"

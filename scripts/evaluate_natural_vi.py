@@ -81,9 +81,13 @@ def writing_outcome(row: dict[str, Any], expect: dict[str, Any]) -> str:
     return DRAFT if row["failed"] else OK
 
 
+ERROR_KINDS = {"Writing result is empty.": "rong_sau_khi_cat", "Ollama response content is empty.": "model_tra_rong",
+               "Ollama response does not contain message content.": "model_tra_sai"}
+
+
 def writing_stage(row: dict[str, Any], expect: dict[str, Any]) -> str:
     if row.get("error"):
-        return row["error"]
+        return ":".join(part for part in (row.get("errorAt"), row["error"], row.get("errorKind")) if part)
     if expect.get("ask"):
         return "nhap_khi_phai_hoi" if row["intent"] == "WRITING" and row.get("source") else "dung"
     if row["intent"] != "WRITING":
@@ -267,6 +271,7 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
                                   "selectedText": case.get("selectedText"), "intent": result.model_dump(mode="json")})
             except Exception as exc:
                 row["error"] = error_stop(exc)
+                row["errorAt"] = "intent"
             rows.append(row)
         sources = probe(items) if items else {}
         by_id = {case["id"]: case for case in cases}
@@ -287,6 +292,8 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
                 except Exception as exc:
                     row["usedModel"] = True
                     row["error"] = error_stop(exc)
+                    row["errorAt"] = "viet"
+                    row["errorKind"] = ERROR_KINDS.get(str(exc), "khac")
             row["outcome"] = writing_outcome(row, expect)
             row["stage"] = writing_stage(row, expect)
         return rows

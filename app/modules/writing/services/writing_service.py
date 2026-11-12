@@ -41,11 +41,13 @@ class WritingService:
                 # The prompt names days in English in the source ("thứ Năm (Thursday)");
                 # the hint is no part of the translation.
                 result = DAY_HINT.sub("", result)
+            copied = request.action is WritingAction.CONTINUE and result.strip().startswith(request.text.strip())
             if request.action is WritingAction.CONTINUE and result.startswith(request.text):
                 result = result[len(request.text):]
-            if not result.strip():
+            if not result.strip() and not copied:
                 raise InvalidLLMResponseError("Writing result is empty.")
-            problem = writing_problem(request.action, request.text, result.strip(), request.language, demanded)
+            problem = ("copied" if not result.strip() else
+                       writing_problem(request.action, request.text, result.strip(), request.language, demanded))
             if problem is None:
                 return generation, result
             logger.warning("writing_check_failed operation=%s problem=%s attempt=%d",

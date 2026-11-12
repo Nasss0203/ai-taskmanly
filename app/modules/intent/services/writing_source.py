@@ -18,8 +18,9 @@ ACTIONS = tuple(words("write_translate", "write_improve", "write_shorten", "writ
                       "write_continue"))
 PASSAGE = tuple(words("write_passage"))
 PASSAGE_HEAD = tuple(words("write_passage_head"))
-PASSAGE_POINTER = tuple(words("write_passage_pointer"))
-FILLER = tuple(words("help_after_verb", "write_passage", "inline_lead_filler")) + ("this", "it", "lai", "nay")
+PASSAGE_POINTER = tuple(words("write_passage_pointer", "write_selection"))
+FILLER = tuple(words("help_after_verb", "write_help_after_verb", "write_passage", "inline_lead_filler")) + (
+    "this", "it", "lai", "nay")
 STYLE_WORDS = tuple(words("write_style_improve", "write_style_shorten", "write_style_expand"))
 LANGUAGE_BEFORE = tuple(words("language_prep", "language_noun"))
 LANGUAGES = ("tieng tay ban nha", "tieng anh", "tieng viet", "tieng nhat", "tieng han", "tieng phap", "tieng duc",
@@ -28,6 +29,9 @@ TAIL = tuple(words("tail", "trailing_with"))
 # Translating takes any phrase ("dịch sang tiếng Anh cảm ơn anh"); for the other
 # actions the words after the verb are usually how to write ("viết lại cho hay
 # hơn"), so only a real passage counts.
+COMMAND_WORDS = tuple(words("lead", "let_me", "help_after_verb", "write_help_after_verb", "tail", "write_passage",
+                            "write_passage_head", "write_passage_pointer", "write_selection", "write_soft_tail",
+                            "write_style_improve", "write_style_shorten", "write_style_expand")) + LANGUAGES
 MIN_WORDS = {"dich": 2, "translate": 2}
 MIN_PASSAGE_WORDS = 8
 SHORT_PASSAGE_WORDS = 4
@@ -103,10 +107,18 @@ def _points_at_passage(folded: list[str], start: int, end: int) -> bool:
     return False
 
 
+def _content_words(folded: list[str], start: int, end: int) -> int:
+    part, count, index = folded[:end], 0, start
+    while index < end:
+        size = _language_at(part, index) or _starts(part, index, COMMAND_WORDS)
+        count, index = (count, index + size) if size else (count + 1, index + 1)
+    return count
+
+
 def _passage(words: list[str], folded: list[str], start: int, end: int, verb: str, styled: bool) -> str | None:
     if any(_starts(folded, index, PASSAGE) for index in range(start, end)) or _points_at_passage(folded, start, end):
         return None
-    if end - start < MIN_WORDS.get(verb, MIN_PASSAGE_WORDS if styled else SHORT_PASSAGE_WORDS):
+    if _content_words(folded, start, end) < MIN_WORDS.get(verb, MIN_PASSAGE_WORDS if styled else SHORT_PASSAGE_WORDS):
         return None
     return " ".join(words[start:end]).strip(" :,.") or None
 

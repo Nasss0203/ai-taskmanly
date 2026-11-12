@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.core.exceptions import InvalidLLMResponseError
+from app.core.exceptions import InvalidLLMResponseError, WritingNotDoneError
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
 from app.llm.providers.fake import FakeLLMProvider as ProductionFakeLLMProvider
 from app.modules.writing.schemas import WritingAction, WritingRequest
@@ -119,21 +119,42 @@ def test_continue_preserves_suffix_only() -> None:
 
 def test_continue_rejects_source_only() -> None:
     source = "Taskmanly giúp nhóm quản lý công việc."
-    provider = FakeLLMProvider([source])
+    provider = FakeLLMProvider([source, source])
     service = WritingService(provider)
     request = WritingRequest(action=WritingAction.CONTINUE, text=source)
 
-    with pytest.raises(InvalidLLMResponseError):
+    with pytest.raises(WritingNotDoneError):
         asyncio.run(service.process(request))
+    assert len(provider.calls) == 2
+    assert "chép lại" in provider.calls[1]["system_prompt"]
 
 
 def test_continue_rejects_whitespace_only_suffix() -> None:
-    provider = FakeLLMProvider(["Người dùng có thể   "])
+    provider = FakeLLMProvider(["Người dùng có thể   ", "Người dùng có thể"])
     service = WritingService(provider)
     request = WritingRequest(action=WritingAction.CONTINUE, text="Người dùng có thể")
 
-    with pytest.raises(InvalidLLMResponseError):
+    with pytest.raises(WritingNotDoneError):
         asyncio.run(service.process(request))
+
+
+def test_continue_that_copied_the_source_is_written_again(no_quality_check: None) -> None:
+    source = "Người dùng có thể"
+    provider = FakeLLMProvider([source, "Người dùng có thể quản lý công việc."])
+    request = WritingRequest(action=WritingAction.CONTINUE, text=source)
+
+    response = asyncio.run(WritingService(provider).process(request))
+
+    assert response.result == " quản lý công việc."
+    assert len(provider.calls) == 2
+
+
+def test_empty_model_answer_is_still_a_system_error() -> None:
+    provider = FakeLLMProvider(["   "])
+    request = WritingRequest(action=WritingAction.IMPROVE, text="Nội dung cần xử lý.")
+
+    with pytest.raises(InvalidLLMResponseError):
+        asyncio.run(WritingService(provider).process(request))
 
 
 def test_improve_trims_result() -> None:

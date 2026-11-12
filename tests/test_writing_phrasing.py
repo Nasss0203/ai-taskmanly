@@ -151,6 +151,103 @@ def test_dev_ask_forms_point_at_passages_in_many_ways() -> None:
     assert sum(pointed(sentence) for sentence in DEV_BANK["writing"]["ask"]) >= 10
 
 
+PROBE_VERBS = ["dịch", "tóm tắt", "viết lại", "rút gọn", "mở rộng", "viết tiếp", "sửa lỗi chính tả", "làm ngắn",
+               "trau chuốt", "tóm gọn", "viết dài hơn", "diễn đạt lại"]
+PROBE_MIDDLES = ["", "giúp mình", "giúp tôi", "hộ mình", "dùm mình", "cho mình", "giùm mình", "đoạn văn",
+                 "đoạn văn bản", "nội dung", "đoạn mình chọn", "đoạn đang chọn", "phần mình bôi đen",
+                 "đoạn văn đã chọn", "nội dung mình gửi", "văn bản mình dán"]
+PROBE_TAILS = ["", "nhé", "nha", "với", "được không", "sang tiếng Anh", "ra tiếng Nhật", "cho hay hơn",
+               "cho ngắn gọn", "một chút", "lại", "thêm", "cho mình với", "bằng tiếng Anh", "ngắn thôi",
+               "cho chuyên nghiệp hơn nhé"]
+
+
+def test_commands_with_no_text_never_draft() -> None:
+    import itertools
+
+    sentences = [" ".join(part for part in parts if part)
+                 for parts in itertools.product(PROBE_VERBS, PROBE_MIDDLES, PROBE_TAILS)]
+    assert len(sentences) == 3072
+    assert [sentence for sentence in sentences if _draft(sentence)][:10] == []
+
+
+def test_dev_inline_sentences_keep_their_text() -> None:
+    from app.modules.intent.services.writing_source import inline_writing_text
+    from evaluation.natural_vi_generator import DEV_BANK
+
+    data = DEV_BANK["writing"]
+    wrong = []
+    generic_verb = "sửa giúp mình câu {x} cho lịch sự"
+    for entry in data["inline_forms"]:
+        styled = "cho" in entry["form"].split()
+        for text in data["inline_texts"]:
+            expected = None if entry["form"] == generic_verb or (styled and len(text.split()) < 8) else text
+            if inline_writing_text(entry["form"].format(x=text)) != expected:
+                wrong.append(entry["form"].format(x=text))
+    assert wrong == []
+
+
+@pytest.mark.parametrize("sentence, action", [
+    ("tóm tắt phần mình bôi đen", "SUMMARIZE"),
+    ("dịch đoạn mình chọn sang tiếng Anh", "TRANSLATE"),
+    ("nội dung mình gửi viết gọn hơn được không", "SHORTEN"),
+    ("mình muốn đoạn đang chọn lịch sự hơn", "IMPROVE"),
+    ("phần mình bôi đen dịch sang tiếng Anh giúp mình", "TRANSLATE"),
+    ("đoạn mình chọn tóm tắt giúp mình", "SUMMARIZE"),
+])
+def test_describing_the_selection_reads_it(sentence: str, action: str) -> None:
+    result = intent(sentence)
+    assert (result.intent, result.writingAction) == ("WRITING", action)
+
+
+UNFINISHED = "Sáng nay cả nhóm đã thống nhất kế hoạch, việc đầu tiên là"
+CONTINUE_SAYINGS = [
+    "viết thêm phần tiếp theo", "viết thêm vài câu tiếp theo", "viết thêm cho đoạn này hoàn chỉnh",
+    "hoàn thành nốt đoạn này", "viết phần kết cho đoạn này", "viết nối đoạn này", "viết cho hết đoạn này",
+    "thêm phần tiếp theo cho đoạn này", "viết hoàn chỉnh câu này", "viết đoạn tiếp theo", "tiếp tục đoạn này",
+    "kết thúc đoạn này giúp mình", "nối tiếp đoạn văn này", "làm tiếp đoạn này", "keep writing",
+]
+
+
+@pytest.mark.parametrize("sentence", CONTINUE_SAYINGS)
+def test_ways_of_saying_continue(sentence: str) -> None:
+    result = intent(sentence, selected=UNFINISHED)
+    assert (result.intent, result.writingAction) == ("WRITING", "CONTINUE")
+
+
+def test_every_dev_continue_form_continues() -> None:
+    from evaluation.natural_vi_generator import DEV_BANK
+
+    forms = next(entry["forms"] for entry in DEV_BANK["writing"]["actions"] if entry["action"] == "CONTINUE")
+    assert [form for form in forms if intent(form, selected=UNFINISHED).writingAction != "CONTINUE"] == []
+
+
+@pytest.mark.parametrize("sentence", ["viết thêm đoạn sau", "viết thêm ví dụ cho đoạn này"])
+def test_adding_to_a_passage_still_expands(sentence: str) -> None:
+    assert intent(sentence, selected=UNFINISHED).writingAction == "EXPAND"
+
+
+def test_unclear_finish_is_not_read_as_continue() -> None:
+    try:
+        action = intent("hoàn thiện đoạn này", selected=UNFINISHED).writingAction
+    except AssertionError:
+        action = "model"
+    assert action != "CONTINUE"
+
+
+@pytest.mark.parametrize("sentence", ["tiếp tục nhé", "làm tiếp việc Gọi khách",
+                                      "làm tiếp việc Gọi khách ở trang Hội họp tuần"])
+def test_going_on_without_a_passage_is_not_writing(sentence: str) -> None:
+    try:
+        found = intent(sentence, selected=None).intent
+    except AssertionError:
+        found = "model"
+    assert found != "WRITING"
+
+
+def test_adding_the_next_task_stays_a_page_edit() -> None:
+    assert intent("thêm việc tiếp theo vào trang Hội họp tuần", selected=None).intent == "MODIFY_PAGE"
+
+
 @pytest.mark.parametrize("sentence", [
     "thêm việc viết báo cáo ngắn hơn vào trang Hội họp tuần",
     "thêm việc gọi khách vào trang trọng điểm",

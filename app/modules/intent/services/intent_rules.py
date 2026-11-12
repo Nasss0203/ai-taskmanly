@@ -63,12 +63,18 @@ STYLE_OF = {word: action for action, group in (('IMPROVE', 'write_style_improve'
                                                ('EXPAND', 'write_style_expand')) for word in words(group)}
 STYLES = pattern('write_style_improve', 'write_style_shorten', 'write_style_expand')
 STYLE = re.compile(rf'\b(?:cho\s+(?P<after>{STYLES})|(?P<before>{STYLES})\s+hon)\b')
-POINTED = rf'(?:{pattern("write_passage")}|{pattern("write_passage_head")}\s+{pattern("write_passage_pointer")})'
+POINTED = (rf'(?:{pattern("write_passage")}|{pattern("write_passage_head")}\s+'
+           rf'{pattern("write_passage_pointer", "write_selection")})')
 PASSAGE = re.compile(rf'\b{POINTED}\b')
 PASSAGE_LEAD = re.compile(rf'^(?:{POINTED}|{pattern("write_before_verb")})\s*,?\s+')
 GENERIC_FIX = re.compile(rf'^{pattern("write_generic_fix")}\b')
 GENERIC_MAKE = re.compile(rf'^{pattern("write_generic_make")}\b')
 CONVERT = re.compile(rf'^{pattern("write_convert")}\b')
+CONTINUE_SOFT = re.compile(rf'^{pattern("write_continue_soft")}\b')
+CONTINUE_MARK = pattern('write_continue_mark')
+ADD_NEXT = re.compile(rf'^(?:viet them|viet|them)\s+(?:(?:mot vai|vai|mot)\s+)?(?:{pattern("write_passage_head")}\s+)?'
+                      rf'{CONTINUE_MARK}\b')
+ADD_THEN_NEXT = re.compile(rf'^(?:viet them|them)\b.*\b{CONTINUE_MARK}\b')
 LANGUAGE_BEFORE = pattern('language_prep', 'language_noun')
 WANT_LEAD = re.compile(rf'^(?:{pattern("want", "let_me")}\s+)+')
 SHORT_LEAD = re.compile(rf'^{pattern("lead_short")}\s+')
@@ -127,6 +133,10 @@ def writing_action(source: str, *, soft: bool = False, selected: bool = False) -
     if ',' in text:
         candidates.append(command_text(text.rsplit(',', 1)[1]))
     for candidate in candidates:
+        if ADD_NEXT.match(candidate) and (passage or candidate.startswith('viet')):
+            return 'CONTINUE'
+        if (ADD_THEN_NEXT.match(candidate) or CONTINUE_SOFT.match(candidate)) and passage:
+            return 'CONTINUE'
         found = _verb_action(candidate)
         if found:
             action, verb = found
