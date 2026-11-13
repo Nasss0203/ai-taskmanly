@@ -49,6 +49,7 @@ QUESTION_WORDS = re.compile(
     r"\?\s*$|\b(?:ai|gi|nao|bao gio|khi nao|luc nao|o dau|the nao|bao nhieu|la ai|co .+ khong|"
     r"who|what|when|where|which|how|is there|are there|does|do)\b"
 )
+TITLED_QUESTION_WORDS = re.compile(r"\b(?:may gio|thu may|ngay may|luc may|bao lau)\b")
 FIND_ONLY = re.compile(r"\b(?:tim (?:mot |1 |cai )?(?:trang|page)|(?:trang|page) nao|which page|find (?:the )?page)\b")
 DATABASE_KINDS = {"bang", "table", "database", "co so du lieu"}
 
@@ -73,9 +74,18 @@ def _name_after(text: Folded, start: int) -> str | None:
     return name or None
 
 
-def _references(text: Folded) -> tuple[str | None, str | None, bool]:
+def _known_title(text: Folded, start: int, titles: tuple[str, ...]) -> str | None:
+    for title in sorted(titles, key=len, reverse=True):
+        folded = fold(unicodedata.normalize("NFC", title).strip())
+        end = start + len(folded)
+        if folded and text.value.startswith(folded, start) and not re.match(r"\w", text.value[end:end + 1]):
+            return title
+    return None
+
+
+def _references(text: Folded, titles: tuple[str, ...] = ()) -> tuple[str | None, str | None, bool, bool]:
     page = database = None
-    current = False
+    current = titled = False
     for marker in MARKER.finditer(text.value):
         after = text.value[marker.end():].lstrip()
         start = len(text.value) - len(after)
@@ -83,6 +93,10 @@ def _references(text: Folded) -> tuple[str | None, str | None, bool]:
             current = True
             continue
         if NOT_A_NAME.match(after) or not after:
+            continue
+        known = _known_title(text, start, titles) if marker.group("kind") not in DATABASE_KINDS else None
+        if known and page is None:
+            page, titled = known, True
             continue
         name = _name_after(text, start)
         if not name:
@@ -99,17 +113,17 @@ def _references(text: Folded) -> tuple[str | None, str | None, bool]:
                 page = name or None
             else:
                 database = name or None
-    return page, database, current
+    return page, database, current, titled
 
 
-def page_question(source: str, *, has_current_page: bool) -> PageQuestion | None:
+def page_question(source: str, *, has_current_page: bool, titles: tuple[str, ...] = ()) -> PageQuestion | None:
     text = Folded(unicodedata.normalize("NFC", source).strip())
     folded = " ".join(text.value.split())
     if not folded or FIND_ONLY.search(folded) or HOW_TO.match(folded) or HISTORY.search(folded):
         return None
     if EDIT_START.match(folded) or EDIT_START.match(fold(command_text(source)).strip()):
         return None
-    page, database, current = _references(text)
+    page, database, current, titled = _references(text, titles)
     named = bool(page or database or current)
     if not named and not has_current_page:
         return None
@@ -123,7 +137,7 @@ def page_question(source: str, *, has_current_page: bool) -> PageQuestion | None
         kind = "TODO_STATUS"
     elif COUNT_WORDS.search(folded) and re.search(r"\b(?:dong|hang|row|rows|ban ghi|record)\b", folded):
         kind = "DATABASE_COUNT"
-    elif named and QUESTION_WORDS.search(folded):
+    elif named and (QUESTION_WORDS.search(folded) or titled and TITLED_QUESTION_WORDS.search(folded)):
         kind = "FREE"
     else:
         return None

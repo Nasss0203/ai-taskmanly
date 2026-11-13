@@ -11,7 +11,7 @@ from app.modules.modification_planner.services.block_delete import parse_block_d
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.modules.page_intent.services.page_reference_evidence import (
-    QUOTED_TEXT, activity_page_reference, content_page_reference, detect_page_reference,
+    QUOTED_TEXT, activity_page_reference, content_page_reference, detect_with_titles,
     is_read_only_page_request,
     has_multiple_page_targets, mask_quoted_text, source_backed_edit_instruction,
 )
@@ -251,7 +251,7 @@ def creation_evidence(source: str) -> bool:
 
 def edit_evidence(request: IntentRequest) -> bool:
     source = request.instruction
-    evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
+    evidence = detect_with_titles(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
     if source_backed_edit_instruction(source, evidence):
         return True
     # "gửi email xong rồi" names the to-do first; there is no leading verb.
@@ -316,7 +316,7 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     if content_page_reference(source) is not None or activity_page_reference(source) is not None:
         return result('MODIFY_PAGE')
     if not request.selectedText and not inline_source(source):
-        question = page_question(source, has_current_page=bool(request.currentPageId))
+        question = page_question(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
         if question is not None and question.kind == 'MIXED':
             return result('UNCLEAR')
         if question is not None:
@@ -331,14 +331,14 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     has_page = bool(PAGE_WORD.search(text))
     # "tạo bản ghi xong rồi, trong trang X" ticks a to-do: decided before creation.
     if has_page and parse_todo_status(source) is not None:
-        evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
+        evidence = detect_with_titles(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
         missing_current = evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId
         return result('MODIFY_PAGE', clarify=missing_current or evidence.reference_type == 'UNRESOLVED')
     if creation_evidence(source) and CREATE_COMMAND.match(text):
         return result('CREATE_PAGE')
     action = writing_action(source, selected=bool(request.selectedText))
     if has_page and edit_evidence(request):
-        evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
+        evidence = detect_with_titles(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
         missing_current = evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId
         return result('MODIFY_PAGE', clarify=missing_current or evidence.reference_type == 'UNRESOLVED')
     if action:

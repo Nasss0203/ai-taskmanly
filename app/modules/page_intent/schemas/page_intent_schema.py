@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-from app.shared.request_limits import CurrentPageId, Instruction, validate_input_budget
+from app.shared.request_limits import CurrentPageId, Instruction, PageTitles, validate_input_budget
 
 
 class PageIntentRequest(BaseModel):
@@ -10,6 +10,7 @@ class PageIntentRequest(BaseModel):
 
     instruction: Instruction
     currentPageId: CurrentPageId | None = None
+    pageTitles: PageTitles = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_budget(self) -> "PageIntentRequest":

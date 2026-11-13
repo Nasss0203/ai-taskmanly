@@ -13,7 +13,7 @@ from app.modules.intent.services.intent_rules import (
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
-    content_page_reference, detect_page_reference,
+    content_page_reference, detect_with_titles,
 )
 from app.shared.json_parser import parse_json_object
 
@@ -94,7 +94,8 @@ class IntentService:
                 return result('UNCLEAR')
             if not has_page and not request.currentPageId:
                 return result('UNCLEAR')
-            evidence = detect_page_reference(source, has_current_page=bool(request.currentPageId))
+            evidence = detect_with_titles(source, has_current_page=bool(request.currentPageId),
+                                          titles=tuple(request.pageTitles))
             return result('MODIFY_PAGE', clarify=evidence.reference_type == 'UNRESOLVED'
                           or evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId)
         action = writing_action(source, soft=True, selected=selected)

@@ -206,7 +206,7 @@ def _modify_once(data: dict[str, Any], services: Any, probe: Callable, contexts:
 
     async def once(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
         by_id = {case["id"]: case for case in cases}
-        rows = await run_cases(cases, services, probe, contexts, pages=pages, current_page_id=open_id)
+        rows = await run_cases(cases, services, probe, contexts, pages=pages, current_page_id=open_id, titles=probe)
         return [{"id": row["id"], "usedModel": row["usedModel"], "stop": row["stop"], "failed": row["failed"],
                  "intent": row.get("intent"), "pageTitle": row.get("pageTitle"),
                  "outcome": modify_outcome(row, by_id[row["id"]]["expect"], contexts[by_id[row["id"]]["page"]]["page"]["title"])}
@@ -301,7 +301,7 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
     return once
 
 
-def _question_once(data: dict[str, Any], services: Any) -> Callable:
+def _question_once(data: dict[str, Any], services: Any, probe: Callable) -> Callable:
     from app.core.exceptions import WritingNotDoneError
     from app.modules.intent.schemas.intent_schema import IntentRequest
     from app.modules.page_question.schemas import PageQuestionRequest
@@ -309,12 +309,13 @@ def _question_once(data: dict[str, Any], services: Any) -> Callable:
 
     questions = PageQuestionService(services.writer_provider)
     known = {title.casefold() for title in [*data["pages"].values(), *data["decoys"]]}
+    pages = [{"id": f"page-{index}", "title": title} for index, title in enumerate([*data["pages"].values(), *data["decoys"]])]
 
-    async def run(case: dict[str, Any]) -> dict[str, Any]:
+    async def run(case: dict[str, Any], titles: list[str]) -> dict[str, Any]:
         expect = case["expect"]
         row: dict[str, Any] = {"id": case["id"], "usedModel": False, "failed": [], "intent": None}
         try:
-            response = await services.intents.process(IntentRequest(instruction=case["instruction"]))
+            response = await services.intents.process(IntentRequest(instruction=case["instruction"], pageTitles=titles))
             intent = response.result
             row.update(intent=intent.intent, reference=intent.pageReference, usedModel=response.provider == MODEL_PROVIDER)
             answer = problem = None
@@ -336,7 +337,9 @@ def _question_once(data: dict[str, Any], services: Any) -> Callable:
         return row
 
     async def once(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [await run(case) for case in cases]
+        named = probe([{"id": case["id"], "kind": "titles", "instruction": case["instruction"], "pages": pages}
+                       for case in cases]) if cases else {}
+        return [await run(case, (named.get(case["id"]) or {}).get("titles") or []) for case in cases]
 
     return once
 
@@ -387,7 +390,7 @@ async def run_split(args: argparse.Namespace) -> dict[str, Any]:
     makers = {"modify": lambda: _modify_once(bank["modify"], services, probe, contexts),
               "compose": lambda: _compose_once(services),
               "writing": lambda: _writing_once(services, probe),
-              "question": lambda: _question_once(bank["question"], services)}
+              "question": lambda: _question_once(bank["question"], services, probe)}
     results = {}
     try:
         for name in wanted:

@@ -108,6 +108,10 @@ WritingText = Annotated[
     AfterValidator(validate_input_budget),
 ]
 BoundedContext = Annotated[dict[str, Any], BeforeValidator(validate_context)]
+PageTitles = Annotated[
+    list[Annotated[str, Field(min_length=1, max_length=255), AfterValidator(require_non_blank)]],
+    Field(max_length=5),
+]
 CurrentPageId = Annotated[
     str,
     Field(min_length=1, max_length=128),

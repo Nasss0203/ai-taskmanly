@@ -511,6 +511,73 @@ def detect_page_reference(
     return PageReferenceEvidence("TITLE", title, instruction)
 
 
+TITLE_PREPOSITION = re.compile(
+    r"(?:\s*(?<!\w)(?:ở|o|trong|vào|vao|tại|tai|khỏi|khoi|của|cua|trên|tren|cho|in|on|to|from|of)(?!\w))+\s*$",
+    re.IGNORECASE,
+)
+LEAD_WORDS = re.compile(
+    rf"^(?:{pattern('lead', 'lead_short', 'let_me', 'want', marked=True)}\s+)*", re.IGNORECASE,
+)
+TITLE_NAME_WORD = re.compile(r"\s+(?:(?:có\s+)?tên\s+|named\s+|called\s+)?", re.IGNORECASE)
+
+
+def _same_title(left: str, right: str) -> bool:
+    return normalize(left).strip() == normalize(right).strip()
+
+
+def _title_spans(text: str, titles: tuple[str, ...]) -> list[tuple[int, int, str]]:
+    ordered = sorted((unicodedata.normalize("NFC", title).strip() for title in titles), key=len, reverse=True)
+    spans = []
+    for marker in _target_markers(text):
+        gap = TITLE_NAME_WORD.match(text, marker.end())
+        start = gap.end() if gap else marker.end()
+        for title in ordered:
+            end = start + len(title)
+            if title and normalize(text[start:end]) == normalize(title) and not re.match(r"\w", text[end:end + 1]):
+                spans.append((marker.start(), end, title))
+                break
+    return spans
+
+
+def _edit_clause(text: str) -> bool:
+    return is_edit_clause(LEAD_WORDS.sub("", text).strip())
+
+
+def known_title_reference(source: str, titles: tuple[str, ...]) -> PageReferenceEvidence | None:
+    text = unicodedata.normalize("NFC", source).strip()
+    spans = _title_spans(text, titles)
+    if len({normalize(title) for _, _, title in spans}) != 1:
+        return None
+    marker_start, end, title = spans[0]
+    before = text[:marker_start]
+    after = text[end:].strip().lstrip(",;:.").strip()
+    rest = re.sub(rf"\s*{POLITE_TAIL}[.!?\s]*$", "", after, flags=re.IGNORECASE).strip(" .!?")
+    edit = TITLE_PREPOSITION.sub("", before).strip()
+    if not rest:
+        instruction = _source_instruction(text, marker_start) or (edit if _edit_clause(edit) else None)
+    elif LEADING_LOCATIVE.match(before):
+        instruction = after if _edit_clause(after) else None
+    elif _edit_clause(edit):
+        instruction = f"{edit} {after}"
+    else:
+        instruction = None
+    return PageReferenceEvidence("TITLE", title, instruction)
+
+
+def detect_with_titles(
+    source: str, *, has_current_page: bool = False, titles: tuple[str, ...] = (),
+) -> PageReferenceEvidence:
+    """Kế hoạch tiếng Việt tự nhiên (G2a): a real title NestJS found after "trang"
+    ends the name; without one, or when the rules already read that title, the
+    rules stand."""
+    evidence = detect_page_reference(source, has_current_page=has_current_page)
+    read = evidence.reference_type == "TITLE" and any(_same_title(evidence.title or "", title) for title in titles)
+    if not titles or (read and evidence.instruction):
+        return evidence
+    known = known_title_reference(source, titles)
+    return known if known and (known.instruction or not read) else evidence
+
+
 # M2 (kế hoạch tìm theo hoạt động, B1): "… vào trang [gợi ý] tôi sửa hôm qua"
 # names a Page by the user's own edits, not by its title. Only the words are
 # taken here; NestJS turns the time into dates in the user's time zone.

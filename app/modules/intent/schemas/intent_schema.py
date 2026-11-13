@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-from app.shared.request_limits import CurrentPageId, Instruction, WritingText, validate_input_budget
+from app.shared.request_limits import CurrentPageId, Instruction, PageTitles, WritingText, validate_input_budget
 
 
 ModelIntentType = Literal['CREATE_PAGE', 'MODIFY_PAGE', 'WRITING', 'OTHER', 'UNCLEAR']
@@ -19,6 +19,7 @@ class IntentRequest(BaseModel):
     instruction: Instruction
     selectedText: WritingText | None = None
     currentPageId: CurrentPageId | None = None
+    pageTitles: PageTitles = Field(default_factory=list)
 
     @model_validator(mode='after')
     def validate_budget(self) -> 'IntentRequest':

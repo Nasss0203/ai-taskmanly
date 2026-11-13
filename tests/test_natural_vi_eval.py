@@ -417,6 +417,32 @@ def run(planner: Fake, answers: list[dict], **extra: object) -> tuple:
     return rows, seen
 
 
+class Recording(Fake):
+    def __init__(self, result: dict) -> None:
+        super().__init__(result)
+        self.requests: list[object] = []
+
+    async def process(self, request: object) -> SimpleNamespace:
+        self.requests.append(request)
+        return await super().process(request)
+
+
+def test_real_titles_are_found_first_and_sent_like_nestjs() -> None:
+    seen: list[list[dict]] = []
+
+    def titles(items: list[dict]) -> dict:
+        seen.append(items)
+        return {item["id"]: {"titles": ["sub man"]} for item in items}
+
+    probe, _ = probe_saying([{"stage": "refused", "status": "UNSUPPORTED_OPERATION"}])
+    found = SimpleNamespace(intents=Recording({"intent": "MODIFY_PAGE"}), pages=Recording(PAGE_INTENT), planner=Fake(PLAN))
+    pages = [{"id": "1", "title": "sub man"}, {"id": "2", "title": "Nhật ký"}]
+    asyncio.run(run_cases([CASE], found, probe, CONTEXTS, pages=pages, titles=titles))
+    assert seen == [[{"id": "c1", "kind": "titles", "instruction": CASE["instruction"], "pages": pages}]]
+    assert found.intents.requests[0].pageTitles == ["sub man"]
+    assert found.pages.requests[0].pageTitles == ["sub man"]
+
+
 def test_planner_is_not_called_for_a_sentence_nestjs_refuses() -> None:
     planner = Fake(RuntimeError("the planner must not run"))
     rows, seen = run(planner, [{"stage": "refused", "status": "UNSUPPORTED_OPERATION"}])

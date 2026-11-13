@@ -21,6 +21,7 @@ from app.modules.page_intent.services.page_reference_evidence import (
     content_page_reference,
     description_page_reference,
     detect_page_reference,
+    detect_with_titles,
     scoped_page_reference,
     explicit_trailing_page_edit,
     is_standalone_writing_request,
@@ -145,6 +146,24 @@ class PageIntentService:
                 provider="deterministic",
                 model="scoped-page-reference-v1",
             )
+        if request.pageTitles:
+            has_current_page = bool(request.currentPageId)
+            known = detect_with_titles(request.instruction, has_current_page=has_current_page,
+                                       titles=tuple(request.pageTitles))
+            if (known.reference_type == "TITLE" and known.instruction
+                    and any(normalize(known.title or "").strip() == normalize(title).strip()
+                            for title in request.pageTitles)):
+                return PageIntentResponse(
+                    result=PageIntentExtraction.model_validate({
+                        "intent": "MODIFY_PAGE",
+                        "referenceType": "TITLE",
+                        "pageReference": known.title,
+                        "instruction": known.instruction,
+                        "needsClarification": False,
+                    }),
+                    provider="deterministic",
+                    model="known-title-reference-v1",
+                )
         explicit = explicit_trailing_page_edit(request.instruction)
         if explicit is not None:
             return PageIntentResponse(

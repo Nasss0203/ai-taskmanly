@@ -123,7 +123,7 @@ def test_classification_never_invokes_existing_capabilities(client, payload, int
 
 def test_openapi_has_no_resolved_id_or_execution_result(client):
     schemas = client.get('/openapi.json').json()['components']['schemas']
-    assert set(schemas['IntentRequest']['properties']) == {'instruction', 'selectedText', 'currentPageId'}
+    assert set(schemas['IntentRequest']['properties']) == {'instruction', 'selectedText', 'currentPageId', 'pageTitles'}
     assert set(schemas['IntentResult']['properties']) == {'intent', 'writingAction', 'language', 'needsClarification',
                                                           'questionKind', 'pageReference', 'databaseReference'}
     assert schemas['IntentRequest']['additionalProperties'] is False

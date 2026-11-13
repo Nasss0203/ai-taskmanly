@@ -89,23 +89,30 @@ def verdict(row: dict[str, Any], expect: dict[str, Any]) -> bool:
 
 async def run_cases(cases: list[dict[str, Any]], services: Any, probe: Callable[[list[dict[str, Any]]], dict[str, Any]],
                     contexts: dict[str, Any], pages: list[dict[str, str]] | None = None,
-                    current_page_id: str = CURRENT_PAGE_ID) -> list[dict[str, Any]]:
+                    current_page_id: str = CURRENT_PAGE_ID,
+                    titles: Callable[[list[dict[str, Any]]], dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     from app.modules.intent.schemas.intent_schema import IntentRequest
     from app.modules.modification_planner.schemas.modification_planner_schema import ModificationPlannerRequest
     from app.modules.page_intent.schemas.page_intent_schema import PageIntentRequest
 
     by_id = {case["id"]: case for case in cases}
+    named = titles([{"id": case["id"], "kind": "titles", "instruction": case["instruction"],
+                     "pages": pages or [{"id": case["id"], "title": contexts[case["page"]]["page"]["title"]}]}
+                    for case in cases]) if titles and cases else {}
     rows, first_items = [], []
     for case in cases:
         current = current_page_id if case.get("current") else None
+        found = (named.get(case["id"]) or {}).get("titles") or []
         row: dict[str, Any] = {"id": case["id"], "instruction": case["instruction"], "failed": [], "usedModel": False}
         started = perf_counter()
         try:
-            intent = await services.intents.process(IntentRequest(instruction=case["instruction"], currentPageId=current))
+            intent = await services.intents.process(IntentRequest(instruction=case["instruction"], currentPageId=current,
+                                                                  pageTitles=found))
             row["intent"] = intent.result.intent
             row["usedModel"] = intent.provider == MODEL_PROVIDER
             if row["intent"] == "MODIFY_PAGE":
-                page = await services.pages.process(PageIntentRequest(instruction=case["instruction"], currentPageId=current))
+                page = await services.pages.process(PageIntentRequest(instruction=case["instruction"], currentPageId=current,
+                                                                      pageTitles=found))
                 page_intent = page.result.model_dump(mode="json")
                 row.update(reference=page_intent.get("referenceType"), pageIntentModel=page.model, pageIntent=page_intent)
                 row["usedModel"] = row["usedModel"] or page.provider == MODEL_PROVIDER
@@ -189,7 +196,8 @@ async def main(args: argparse.Namespace) -> int:
     cases = [json.loads(line) for line in args.cases.read_text(encoding="utf-8").splitlines() if line.strip()]
     by_id = {case["id"]: case for case in cases}
     try:
-        rows = await run_cases(cases, services, lambda items: run_probe(args.be, items), CONTEXTS)
+        rows = await run_cases(cases, services, lambda items: run_probe(args.be, items), CONTEXTS,
+                               titles=lambda items: run_probe(args.be, items))
     finally:
         await close_services(services)
 
