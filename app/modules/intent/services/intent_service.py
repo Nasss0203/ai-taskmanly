@@ -9,7 +9,7 @@ from app.modules.intent.prompts.intent_prompt import build_intent_prompt
 from app.modules.intent.schemas.intent_schema import IntentExtraction, IntentRequest, IntentResponse, IntentResult
 from app.modules.intent.services.intent_rules import (
     PAGE_WORD, creation_evidence, deterministic_result, directive_text, edit_evidence,
-    inline_source, is_page_summary, is_read_only, multiple_commands, result,
+    inline_source, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result,
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
@@ -84,9 +84,13 @@ class IntentService:
             # A model's conservative answer must not be promoted to mutation.
             return result(classification.intent)
         if classification.intent == 'CREATE_PAGE':
-            return result('CREATE_PAGE') if creation_evidence(source) else result('UNCLEAR')
+            if creation_evidence(source):
+                return result('CREATE_PAGE')
+            new_page = (PAGE_WORD.search(directive_text(source)) and not request.pageTitles
+                        and not edit_evidence(request) and not names_page_as_place(source))
+            return result('CREATE_PAGE') if new_page else result('UNCLEAR')
         if classification.intent == 'MODIFY_PAGE':
-            if creation_evidence(source) or not edit_evidence(request):
+            if creation_evidence(source) or not (edit_evidence(request) or request.pageTitles):
                 return result('UNCLEAR')
             action = writing_action(source, selected=selected)
             has_page = bool(PAGE_WORD.search(directive_text(source)))
@@ -98,13 +102,18 @@ class IntentService:
                                           titles=tuple(request.pageTitles))
             return result('MODIFY_PAGE', clarify=evidence.reference_type == 'UNRESOLVED'
                           or evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId)
-        action = writing_action(source, soft=True, selected=selected)
-        if (action != classification.writingAction
+        rule_action = writing_action(source, soft=True, selected=selected)
+        if ((rule_action is not None and rule_action != classification.writingAction)
                 or not (request.selectedText or inline_source(source))
                 or PAGE_WORD.search(directive_text(source))):
             return result('UNCLEAR')
+        action = classification.writingAction
         if action == 'TRANSLATE':
             language = translation_language(source)
-            if language is None or language != classification.language:
+            agreed = (classification.language == language if language is not None
+                      else classification.language in named_languages(source))
+            if not agreed:
                 return result('UNCLEAR')
+        elif rule_action is None and named_languages(source):
+            return result('UNCLEAR')
         return result('WRITING', action, classification.language)

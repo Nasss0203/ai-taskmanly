@@ -336,6 +336,30 @@ def test_modify_rows_carry_where_they_stop() -> None:
     assert rows[0]["stage"] == "nestjs:INVALID_TARGET"
 
 
+def test_compose_sends_the_real_titles_found_in_the_sentence() -> None:
+    from scripts.evaluate_natural_vi import _compose_once
+    from tests.fakes.fake_async_llm_provider import FakeLLMProvider
+
+    seen, probed = [], []
+
+    class Intents:
+        async def process(self, request):
+            seen.append(request)
+            return SimpleNamespace(result=SimpleNamespace(intent="UNCLEAR"), provider="deterministic")
+
+    def probe(items):
+        probed.extend(items)
+        return {"c1": {"titles": ["Hội họp tuần"]}}
+
+    services = SimpleNamespace(intents=Intents(), composer_provider=FakeLLMProvider([]))
+    pages = [{"id": "p1", "title": "Hội họp tuần"}]
+    once = _compose_once(services, probe, pages)
+    asyncio.run(once([{"id": "c1", "group": "bare", "instruction": "tạo trang Hội họp tuần", "expect": {}},
+                      {"id": "c2", "group": "bare", "instruction": "tạo trang Mới", "expect": {}}]))
+    assert [item["kind"] for item in probed] == ["titles", "titles"] and probed[0]["pages"] == pages
+    assert [request.pageTitles for request in seen] == [["Hội họp tuần"], []]
+
+
 def test_final_outcome_takes_the_majority_of_an_ordinary_case() -> None:
     assert final_outcome([OK, DRAFT, OK], must_stop=False) == OK
     assert final_outcome([DRAFT, OK, DRAFT], must_stop=False) == DRAFT

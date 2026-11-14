@@ -229,18 +229,18 @@ def _modify_once(data: dict[str, Any], services: Any, probe: Callable, contexts:
     return once
 
 
-def _compose_once(services: Any) -> Callable:
+def _compose_once(services: Any, probe: Callable | None = None, pages: list[dict[str, str]] | None = None) -> Callable:
     from app.modules.intent.schemas.intent_schema import IntentRequest
     from app.modules.page_composition.schemas.page_composition_schema import PageCompositionRequest
     from app.modules.page_composition.services.page_composition_service import PageCompositionService
 
     composer = PageCompositionService(services.composer_provider)
 
-    async def run(case: dict[str, Any]) -> dict[str, Any]:
+    async def run(case: dict[str, Any], titles: list[str]) -> dict[str, Any]:
         expect = case["expect"]
         row: dict[str, Any] = {"id": case["id"], "usedModel": False, "failed": [], "intent": None}
         try:
-            intent = await services.intents.process(IntentRequest(instruction=case["instruction"]))
+            intent = await services.intents.process(IntentRequest(instruction=case["instruction"], pageTitles=titles))
             row.update(intent=intent.result.intent, usedModel=used_model(intent.provider))
             if row["intent"] == "CREATE_PAGE" and not expect.get("refuse"):
                 response = await composer.process(PageCompositionRequest(instruction=case["instruction"]))
@@ -258,7 +258,9 @@ def _compose_once(services: Any) -> Callable:
         return row
 
     async def once(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [await run(case) for case in cases]
+        named = probe([{"id": case["id"], "kind": "titles", "instruction": case["instruction"], "pages": pages}
+                       for case in cases]) if probe and pages and cases else {}
+        return [await run(case, (named.get(case["id"]) or {}).get("titles") or []) for case in cases]
 
     return once
 
@@ -407,7 +409,7 @@ async def run_split(args: argparse.Namespace) -> dict[str, Any]:
         return run_probe(args.be, items, quiet=holdout)
 
     makers = {"modify": lambda: _modify_once(bank["modify"], services, probe, contexts),
-              "compose": lambda: _compose_once(services),
+              "compose": lambda: _compose_once(services, probe, _sample_pages(bank["modify"])[0]),
               "writing": lambda: _writing_once(services, probe),
               "question": lambda: _question_once(bank["question"], services, probe)}
     results, usage = {}, {}

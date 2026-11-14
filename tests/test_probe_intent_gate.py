@@ -21,10 +21,10 @@ def run(capability, case, local, others=None):
 
 def test_expected_intent_for_each_kind_of_case() -> None:
     assert expected("compose", {"expect": {}})["intents"] == {"CREATE_PAGE"}
-    assert expected("compose", {"expect": {"refuse": True}})["intents"] == {"OTHER", "UNCLEAR"}
+    assert expected("compose", {"expect": {"refuse": True}})["intents"] == {"OTHER", "UNCLEAR", "MODIFY_PAGE", "WRITING"}
     assert expected("modify", {"expect": {}})["intents"] == {"MODIFY_PAGE"}
     assert expected("modify", {"expect": {"ask": True}})["intents"] == {"MODIFY_PAGE", "UNCLEAR"}
-    assert expected("modify", {"expect": {"refuse": True}})["intents"] == {"OTHER", "UNCLEAR"}
+    assert expected("modify", {"expect": {"refuse": True}})["intents"] == {"OTHER", "UNCLEAR", "MODIFY_PAGE"}
     assert expected("writing", {"expect": {"ask": True}})["intents"] == {"OTHER", "UNCLEAR"}
     want = expected("writing", {"expect": {"action": "TRANSLATE", "language": "English"}})
     assert (want["intents"], want["action"], want["language"]) == ({"WRITING"}, "TRANSLATE", "English")
@@ -42,6 +42,12 @@ def test_a_case_that_must_stop_is_not_right_when_the_model_creates() -> None:
     want = expected("compose", {"expect": {"refuse": True}})
     assert not matches({"intent": "CREATE_PAGE", "writingAction": None, "language": None}, want)
     assert matches({"intent": "UNCLEAR", "writingAction": None, "language": None}, want)
+
+
+def test_a_refused_edit_may_reach_nestjs_which_refuses_it() -> None:
+    want = expected("modify", {"expect": {"refuse": True}})
+    assert matches({"intent": "MODIFY_PAGE", "writingAction": None, "language": None}, want)
+    assert not matches({"intent": "CREATE_PAGE", "writingAction": None, "language": None}, want)
 
 
 def test_rules_deciding_right_need_no_model() -> None:
@@ -64,7 +70,7 @@ def test_rules_deciding_wrong_still_ask_every_model() -> None:
 
 def test_a_right_model_answer_lowered_by_the_gate() -> None:
     local = FakeLLMProvider([answer("CREATE_PAGE")])
-    row = run("compose", COMPOSE, local)
+    row = asyncio.run(probe_case("compose", COMPOSE, local, {}, ["Nhật ký đọc sách"]))
     assert (row["final"], row["who"]) == ("UNCLEAR", "cong_ha")
     assert row["raw"]["local"]["intent"] == "CREATE_PAGE"
     assert row["rawRight"] == {"local": True}

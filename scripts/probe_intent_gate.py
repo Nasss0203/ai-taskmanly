@@ -26,9 +26,9 @@ def expected(capability: str, case: dict[str, Any]) -> dict[str, Any]:
     expect = case["expect"]
     want: dict[str, Any] = {"intents": {"CREATE_PAGE"}, "action": None, "language": None}
     if capability == "compose":
-        want["intents"] = set(STOP) if expect.get("refuse") else {"CREATE_PAGE"}
+        want["intents"] = {*STOP, "MODIFY_PAGE", "WRITING"} if expect.get("refuse") else {"CREATE_PAGE"}
     elif capability == "modify":
-        want["intents"] = (set(STOP) if expect.get("refuse")
+        want["intents"] = ({*STOP, "MODIFY_PAGE"} if expect.get("refuse")
                            else {"MODIFY_PAGE", "UNCLEAR"} if expect.get("ask") else {"MODIFY_PAGE"})
     elif expect.get("ask"):
         want["intents"] = set(STOP)
@@ -141,7 +141,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         for capability in (args.only.split(",") if args.only else CAPABILITIES):
             cases = sets[capability]
             named, open_id = {}, None
-            if capability == "modify":
+            if capability in ("modify", "compose"):
                 pages, open_id = _sample_pages(bank["modify"])
                 named = run_probe(args.be, [{"id": case["id"], "kind": "titles", "instruction": case["instruction"],
                                              "pages": pages} for case in cases], quiet=True)

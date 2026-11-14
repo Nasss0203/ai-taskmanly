@@ -192,6 +192,19 @@ def translation_language(source: str) -> str | None:
     return None
 
 
+PLACE_PAGE = re.compile(r'\b(?:trong|vao|o|tai|cua|len|in|into|to|on)\s+(?:the\s+)?(?:trang|page)\b')
+
+
+def names_page_as_place(source: str) -> bool:
+    return bool(PLACE_PAGE.search(directive_text(source)))
+
+
+def named_languages(source: str) -> set[str]:
+    text = directive_text(source)
+    return {canonical for canonical, aliases in LANGUAGES.items()
+            if any(re.search(rf'\b{alias}\b', text) for alias in aliases)}
+
+
 def result(intent: str, action: str | None = None, language: str | None = None,
            *, clarify: bool = False) -> IntentResult:
     return IntentResult(intent=intent, writingAction=action, language=language,
@@ -221,7 +234,8 @@ def unsupported_request(source: str) -> bool:
 
 def unsafe_override(source: str) -> bool:
     return bool(re.search(
-        r'\b(?:bo qua (?:moi |cac )?huong dan|bo qua huong dan truoc|ignore (?:all |previous )?instructions|return pageid)\b',
+        r'\b(?:bo qua (?:moi |cac )?huong dan|bo qua huong dan truoc|'
+        r'ignore (?:all |any )?(?:the )?(?:previous |prior |above |earlier )?instructions|return pageid)\b',
         directive_text(source),
     ))
 
@@ -345,13 +359,15 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
         if request.selectedText or inline_source(source):
             language = translation_language(source) if action == 'TRANSLATE' else None
             if action == 'TRANSLATE' and language is None:
-                return result('UNCLEAR')
+                return None if named_languages(source) else result('UNCLEAR')
             return result('WRITING', action, language)
         if request.currentPageId and edit_evidence(request):
             return result('MODIFY_PAGE')
         return result('UNCLEAR')
     if edit_evidence(request):
-        return result('MODIFY_PAGE') if request.currentPageId else result('UNCLEAR')
+        if request.currentPageId:
+            return result('MODIFY_PAGE')
+        return None if request.selectedText and not has_page else result('UNCLEAR')
     if text.strip(' .!?') in {'voi', 'giup toi voi', 'sua di', 'abc', '', '🙂', 'lam cho tot hon', 'ok', 'cai do', 'lam tiep di', 'them', 'nhu luc nay'}:
         return result('UNCLEAR')
     if VAGUE_POINTING.match(text.strip(' .!?')):

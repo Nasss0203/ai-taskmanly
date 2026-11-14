@@ -35,16 +35,23 @@ Examples: each output is a complete JSON object. Return only the output.
 {"instruction":"Tạo trang lịch họp","output":{"intent":"CREATE_PAGE","writingAction":null,"language":null}}
 {"instruction":"Mình cần một trang ghi chú chi phí","output":{"intent":"CREATE_PAGE","writingAction":null,"language":null}}
 {"instruction":"Giúp mình lên kế hoạch một buổi workshop","output":{"intent":"CREATE_PAGE","writingAction":null,"language":null}}
-{"instruction":"Thêm checklist vào trang \"Dự án\"","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
-{"instruction":"Viết lại trang \"Dự án\" cho hay hơn","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
-{"instruction":"Dịch trang \"Dự án\" sang tiếng Anh","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"trang mới Sửa xe máy gồm các việc thay nhớt, rửa xe","output":{"intent":"CREATE_PAGE","writingAction":null,"language":null}}
+{"instruction":"mình cần trang Học vẽ có bảng Buổi học với cột Ngày, Chủ đề","output":{"intent":"CREATE_PAGE","writingAction":null,"language":null}}
+{"instruction":"Thêm checklist vào trang Dự án","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"ở trang Họp nhóm, thêm việc gửi biên bản","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"gửi biên bản cho cả nhóm, ghi vào trang Họp nhóm giúp mình","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"việc đặt bàn tiệc xong rồi, đánh dấu ở trang Họp nhóm nhé","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"Viết lại trang Dự án cho hay hơn","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
+{"instruction":"Dịch trang Dự án sang tiếng Anh","output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
 {"instruction":"Thêm checklist","hasCurrentPage":true,"output":{"intent":"MODIFY_PAGE","writingAction":null,"language":null}}
-{"instruction":"Viết lại cho hay hơn","hasSelection":true,"output":{"intent":"WRITING","writingAction":"IMPROVE","language":null}}
+{"instruction":"Viết lại cho mượt mà hơn","hasSelection":true,"output":{"intent":"WRITING","writingAction":"IMPROVE","language":null}}
 {"instruction":"Rút gọn","hasSelection":true,"output":{"intent":"WRITING","writingAction":"SHORTEN","language":null}}
 {"instruction":"Chi tiết hơn","hasSelection":true,"output":{"intent":"WRITING","writingAction":"EXPAND","language":null}}
 {"instruction":"Tóm tắt","hasSelection":true,"output":{"intent":"WRITING","writingAction":"SUMMARIZE","language":null}}
 {"instruction":"Viết tiếp","hasSelection":true,"output":{"intent":"WRITING","writingAction":"CONTINUE","language":null}}
-{"instruction":"Dịch \"Hello\" sang tiếng Việt","output":{"intent":"WRITING","writingAction":"TRANSLATE","language":"Vietnamese"}}
+{"instruction":"chuyển phần này thành tiếng Nhật giúp mình","hasSelection":true,"output":{"intent":"WRITING","writingAction":"TRANSLATE","language":"Japanese"}}
+{"instruction":"gom lại vài ý chính của đoạn này","hasSelection":true,"output":{"intent":"WRITING","writingAction":"SUMMARIZE","language":null}}
+{"instruction":"Dịch câu Hello sang tiếng Việt","output":{"intent":"WRITING","writingAction":"TRANSLATE","language":"Vietnamese"}}
 {"instruction":"Read page Project Notes","output":{"intent":"OTHER","writingAction":null,"language":null}}
 {"instruction":"Lên kế hoạch là gì?","output":{"intent":"OTHER","writingAction":null,"language":null}}
 {"instruction":"Dịch đoạn này rồi tóm tắt","hasSelection":true,"output":{"intent":"UNCLEAR","writingAction":null,"language":null}}
