@@ -12,7 +12,9 @@ from app.modules.modification_planner.services.sentence_text import text_key
 from evaluation.natural_vi_generator import DEV_BANK, DEV_SEED, generate
 from scripts import evaluate_page_question
 from scripts.evaluate_chat_writing import check_writing
-from scripts.evaluate_end_to_end import MODEL_PROVIDER, build_services, close_services, error_stop, run_cases, run_probe
+from scripts.evaluate_end_to_end import (
+    build_services, close_services, error_stop, meter_snapshot, meter_usage, run_cases, run_probe, used_model,
+)
 from scripts.evaluate_generation import CONTEXTS, check_composition
 
 OK, ASK, SYSTEM, DRAFT, PAGE = "dung", "hoi_lai", "loi_he_thong", "ban_nhap_sai", "sai_trang"
@@ -21,6 +23,8 @@ STOP_INTENTS = ("UNCLEAR", "OTHER")
 ROOT = Path(__file__).resolve().parents[1]
 SEED_FILE = ROOT / "evaluation" / "results" / "holdout_seed.txt"
 HOLDOUT_MODULE = "evaluation.natural_vi_holdout_forms"
+DEV2_MODULE = "evaluation.natural_vi_dev2_forms"
+DEV2_SEED = 20261114
 CAPABILITIES = ["modify", "compose", "writing", "question"]
 
 
@@ -107,6 +111,16 @@ def extra_failures(draft: dict[str, Any], expect: dict[str, Any]) -> list[str]:
     if "max_databases" in expect and len(draft.get("databases") or []) > expect["max_databases"]:
         return ["databases"]
     return []
+
+
+def compose_stage(row: dict[str, Any], expect: dict[str, Any]) -> str:
+    if row.get("error"):
+        return row["error"]
+    if expect.get("refuse"):
+        return "nhap_khi_phai_chan" if row["intent"] == "CREATE_PAGE" else "dung"
+    if row["intent"] != "CREATE_PAGE":
+        return f"intent:{row['intent']}"
+    return "kiem_tra:" + ",".join(row["failed"]) if row["failed"] else "dung"
 
 
 def compose_outcome(row: dict[str, Any], expect: dict[str, Any]) -> str:
@@ -208,7 +222,7 @@ def _modify_once(data: dict[str, Any], services: Any, probe: Callable, contexts:
         by_id = {case["id"]: case for case in cases}
         rows = await run_cases(cases, services, probe, contexts, pages=pages, current_page_id=open_id, titles=probe)
         return [{"id": row["id"], "usedModel": row["usedModel"], "stop": row["stop"], "failed": row["failed"],
-                 "intent": row.get("intent"), "pageTitle": row.get("pageTitle"),
+                 "intent": row.get("intent"), "pageTitle": row.get("pageTitle"), "stage": row["stop"],
                  "outcome": modify_outcome(row, by_id[row["id"]]["expect"], contexts[by_id[row["id"]]["page"]]["page"]["title"])}
                 for row in rows]
 
@@ -227,10 +241,10 @@ def _compose_once(services: Any) -> Callable:
         row: dict[str, Any] = {"id": case["id"], "usedModel": False, "failed": [], "intent": None}
         try:
             intent = await services.intents.process(IntentRequest(instruction=case["instruction"]))
-            row.update(intent=intent.result.intent, usedModel=intent.provider == MODEL_PROVIDER)
+            row.update(intent=intent.result.intent, usedModel=used_model(intent.provider))
             if row["intent"] == "CREATE_PAGE" and not expect.get("refuse"):
                 response = await composer.process(PageCompositionRequest(instruction=case["instruction"]))
-                row["usedModel"] = row["usedModel"] or response.provider == MODEL_PROVIDER
+                row["usedModel"] = row["usedModel"] or used_model(response.provider)
                 draft = response.result.model_dump(mode="json")
                 row["failed"] = check_composition(draft, expect) + extra_failures(draft, expect)
                 written = {text_key(block["content"].get("text", "")) for block in draft.get("blocks", [])
@@ -240,6 +254,7 @@ def _compose_once(services: Any) -> Callable:
         except Exception as exc:
             row["error"] = error_stop(exc)
         row["outcome"] = compose_outcome(row, expect)
+        row["stage"] = compose_stage(row, expect)
         return row
 
     async def once(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -264,7 +279,7 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
                                                                         selectedText=case.get("selectedText")))
                 result = response.result
                 row.update(intent=result.intent, action=result.writingAction, language=result.language,
-                           usedModel=response.provider == MODEL_PROVIDER)
+                           usedModel=used_model(response.provider))
                 if result.intent == "WRITING":
                     intents[case["id"]] = result
                     items.append({"id": case["id"], "kind": "writing", "instruction": case["instruction"],
@@ -287,7 +302,7 @@ def _writing_once(services: Any, probe: Callable) -> Callable:
                     language = found.get("language") or row["language"]
                     written = await writer.process(WritingRequest(action=WritingAction(row["action"]), text=found["text"],
                                                                   language=language))
-                    row["usedModel"] = row["usedModel"] or written.provider == MODEL_PROVIDER
+                    row["usedModel"] = row["usedModel"] or used_model(written.provider)
                     row["failed"] = check_writing(written.result, found["text"], expect)
                 except Exception as exc:
                     row["usedModel"] = True
@@ -307,7 +322,7 @@ def _question_once(data: dict[str, Any], services: Any, probe: Callable) -> Call
     from app.modules.page_question.schemas import PageQuestionRequest
     from app.modules.page_question.service import PageQuestionService
 
-    questions = PageQuestionService(services.writer_provider)
+    questions = PageQuestionService(services.question_provider)
     known = {title.casefold() for title in [*data["pages"].values(), *data["decoys"]]}
     pages = [{"id": f"page-{index}", "title": title} for index, title in enumerate([*data["pages"].values(), *data["decoys"]])]
 
@@ -317,7 +332,7 @@ def _question_once(data: dict[str, Any], services: Any, probe: Callable) -> Call
         try:
             response = await services.intents.process(IntentRequest(instruction=case["instruction"], pageTitles=titles))
             intent = response.result
-            row.update(intent=intent.intent, reference=intent.pageReference, usedModel=response.provider == MODEL_PROVIDER)
+            row.update(intent=intent.intent, reference=intent.pageReference, usedModel=used_model(response.provider))
             answer = problem = None
             if intent.intent == "PAGE_QUESTION" and "context" in expect:
                 try:
@@ -357,6 +372,10 @@ def _print_report(summary: dict[str, Any], split: str) -> None:
         for group, counts in entry["groups"].items():
             line(f"  {group}", counts)
     for name, entry in summary.items():
+        for used in entry.get("models", []):
+            print(f"{name} [{','.join(used['tasks'])}] {used['provider']}:{used['model']} lượt gọi {used['calls']}, {used['secondsPerCall']} s/lượt, "
+                  f"token vào {used['promptTokens']}, ra {used['completionTokens']}")
+    for name, entry in summary.items():
         for group, counts in entry.get("stages", {}).items():
             print(f"{name} {group} dừng ở: " + ", ".join(f"{stage} {count}" for stage, count in sorted(counts.items())))
     for name, entry in summary.items():
@@ -364,25 +383,25 @@ def _print_report(summary: dict[str, Any], split: str) -> None:
             print(f"{problem['id']} {problem['outcome']} {problem['outcomes']} {problem['last']} | {problem['instruction']}")
 
 
+def split_bank(split: str) -> tuple[dict[str, Any], int, bool]:
+    if split == "holdout":
+        return importlib.import_module(HOLDOUT_MODULE).BANK, load_seed(SEED_FILE), True
+    if split == "dev2":
+        return importlib.import_module(DEV2_MODULE).BANK, DEV2_SEED, False
+    return DEV_BANK, DEV_SEED, False
+
+
 async def run_split(args: argparse.Namespace) -> dict[str, Any]:
     from app.core.config import get_settings
 
-    holdout = args.split == "holdout"
-    bank = importlib.import_module(HOLDOUT_MODULE).BANK if holdout else DEV_BANK
-    seed = load_seed(SEED_FILE) if holdout else DEV_SEED
+    bank, seed, holdout = split_bank(args.split)
     wanted = args.only.split(",") if args.only else CAPABILITIES
     sets = generate(bank, seed)
     contexts = bank.get("contexts") or CONTEXTS
     if bank.get("question_contexts"):
         evaluate_page_question.CONTEXTS.update(bank["question_contexts"])
     config = get_settings()
-    services = build_services(config)
-    writing_model = config.ollama_writing_model or config.ollama_model
-    services.writer_provider = services.provider(writing_model)
-    services.composer_provider = services.provider(getattr(config, "ollama_page_composition_model", None))
-    separate = config.ollama_continue_model and config.ollama_continue_model != config.ollama_model
-    services.continue_provider = services.provider(config.ollama_continue_model) if separate else None
-    services.providers += [item for item in (services.writer_provider, services.composer_provider, services.continue_provider) if item]
+    services = build_services(config, gemini_interval=args.gemini_interval)
 
     def probe(items: list[dict[str, Any]]) -> dict[str, Any]:
         return run_probe(args.be, items, quiet=holdout)
@@ -391,7 +410,7 @@ async def run_split(args: argparse.Namespace) -> dict[str, Any]:
               "compose": lambda: _compose_once(services),
               "writing": lambda: _writing_once(services, probe),
               "question": lambda: _question_once(bank["question"], services, probe)}
-    results = {}
+    results, usage = {}, {}
     try:
         for name in wanted:
             once = makers[name]()
@@ -400,19 +419,26 @@ async def run_split(args: argparse.Namespace) -> dict[str, Any]:
                 print(f"[{capability}] {len(cases)} câu", flush=True)
                 return await step(cases)
 
+            before = meter_snapshot(services)
             results[name] = await measure(sets[name], counted)
+            usage[name] = meter_usage(services, before)
     finally:
         await close_services(services)
     summary = summarize(results, hide_sentences=holdout)
-    return {"split": args.split, **({"seed": seed} if not holdout else {}), "model": config.ollama_model, "capabilities": summary}
+    for name, used in usage.items():
+        summary[name]["models"] = used
+    return {"split": args.split, **({"seed": seed} if not holdout else {}), "model": config.ollama_model,
+            "providers": {task: f"{item.provider_name}:{item.model_name}" for task, item in services.meters.items()},
+            "capabilities": summary}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--split", choices=["dev", "holdout"], required=True)
+    parser.add_argument("--split", choices=["dev", "dev2", "holdout"], required=True)
     parser.add_argument("--be", type=Path, required=True)
     parser.add_argument("--only")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--gemini-interval", type=float, default=0.0)
     args = parser.parse_args()
     if args.split == "holdout":
         logging.disable(logging.CRITICAL)

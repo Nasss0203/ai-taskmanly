@@ -27,7 +27,49 @@ from scripts.evaluate_generation import CONTEXTS
 from scripts.evaluate_simulated_users import check
 
 CURRENT_PAGE_ID = "00000000-0000-4000-8000-000000000001"
-MODEL_PROVIDER = "ollama"
+MODEL_PROVIDERS = frozenset({"ollama", "gemini"})
+
+
+def used_model(provider: str) -> bool:
+    return provider in MODEL_PROVIDERS
+
+
+class Metered:
+    def __init__(self, provider: Any, interval: float = 0.0, sleep: Callable[[float], Any] = asyncio.sleep,
+                 clock: Callable[[], float] = perf_counter) -> None:
+        self.provider = provider
+        self.provider_name = provider.provider_name
+        self.model_name = provider.model_name
+        self._interval, self._sleep, self._clock = interval, sleep, clock
+        self._last: float | None = None
+        self.calls, self.seconds, self.prompt_tokens, self.completion_tokens = 0, 0.0, 0, 0
+
+    async def generate(self, system_prompt: str, user_prompt: str, max_new_tokens: int = 300,
+                       response_schema: dict[str, Any] | None = None) -> Any:
+        if self._interval:
+            now = self._clock()
+            if self._last is not None and now - self._last < self._interval:
+                await self._sleep(self._interval - (now - self._last))
+        started = self._clock()
+        self._last = started
+        try:
+            result = await self.provider.generate(system_prompt, user_prompt, max_new_tokens=max_new_tokens,
+                                                  response_schema=response_schema)
+        finally:
+            self.calls += 1
+            self.seconds += self._clock() - started
+        if result.usage is not None:
+            self.prompt_tokens += result.usage.prompt_tokens
+            self.completion_tokens += result.usage.completion_tokens
+        return result
+
+    def report(self) -> dict[str, Any]:
+        return {"provider": self.provider_name, "model": self.model_name, "calls": self.calls,
+                "seconds": round(self.seconds, 2), "promptTokens": self.prompt_tokens,
+                "completionTokens": self.completion_tokens}
+
+    async def close(self) -> None:
+        await self.provider.close()
 
 
 def check_draft(plan: dict[str, Any], expect: dict[str, Any]) -> list[str]:
@@ -109,13 +151,13 @@ async def run_cases(cases: list[dict[str, Any]], services: Any, probe: Callable[
             intent = await services.intents.process(IntentRequest(instruction=case["instruction"], currentPageId=current,
                                                                   pageTitles=found))
             row["intent"] = intent.result.intent
-            row["usedModel"] = intent.provider == MODEL_PROVIDER
+            row["usedModel"] = used_model(intent.provider)
             if row["intent"] == "MODIFY_PAGE":
                 page = await services.pages.process(PageIntentRequest(instruction=case["instruction"], currentPageId=current,
                                                                       pageTitles=found))
                 page_intent = page.result.model_dump(mode="json")
                 row.update(reference=page_intent.get("referenceType"), pageIntentModel=page.model, pageIntent=page_intent)
-                row["usedModel"] = row["usedModel"] or page.provider == MODEL_PROVIDER
+                row["usedModel"] = row["usedModel"] or used_model(page.provider)
                 first_items.append({"id": case["id"], "instruction": case["instruction"],
                                     "pageTitle": contexts[case["page"]]["page"]["title"], "pageIntent": page_intent,
                                     **({"pages": pages} if pages else {}),
@@ -147,7 +189,7 @@ async def run_cases(cases: list[dict[str, Any]], services: Any, probe: Callable[
                 instruction=row["pageIntent"]["instruction"], context=contexts[case["page"]]))
             plan = response.result.model_dump(mode="json")
             row.update(plan=plan, planStatus=plan.get("status"), plannerModel=response.model)
-            row["usedModel"] = row["usedModel"] or response.provider == MODEL_PROVIDER
+            row["usedModel"] = row["usedModel"] or used_model(response.provider)
             second_items.append({**items_by_id[row["id"]], "plan": plan})
         except Exception as exc:
             row["error"] = error_stop(exc)
@@ -165,23 +207,67 @@ async def run_cases(cases: list[dict[str, Any]], services: Any, probe: Callable[
     return rows
 
 
-def build_services(config: Any) -> Any:
+def build_services(config: Any, gemini_interval: float = 0.0) -> Any:
+    from app.llm.factory import create_gemini_provider
     from app.llm.providers.ollama import OllamaProvider
     from app.modules.intent.services.intent_service import IntentService
     from app.modules.modification_planner.services.modification_planner_service import ModificationPlannerService
     from app.modules.page_intent.services.page_intent_service import PageIntentService
 
-    def provider(model: str | None) -> OllamaProvider:
+    def provider(model: str | None) -> Metered:
         name = model or config.ollama_model
-        return OllamaProvider(base_url=config.ollama_base_url, model_name=name,
-                              timeout_seconds=config.ollama_timeout_seconds, num_ctx=config.ollama_num_ctx,
-                              num_gpu=config.ollama_model_num_gpu.get(name, config.ollama_num_gpu))
+        return Metered(OllamaProvider(base_url=config.ollama_base_url, model_name=name,
+                                      timeout_seconds=config.ollama_timeout_seconds, num_ctx=config.ollama_num_ctx,
+                                      num_gpu=config.ollama_model_num_gpu.get(name, config.ollama_num_gpu)))
+
+    gemini: list[Metered] = []
+
+    def for_task(choice: str | None, current: Metered | None) -> Metered | None:
+        if choice != "gemini":
+            return current
+        if not gemini:
+            gemini.append(Metered(create_gemini_provider(config), interval=gemini_interval))
+        return gemini[0]
 
     intent_provider = provider(config.ollama_intent_model)
-    planner_provider = provider(config.ollama_modification_planner_model)
+    planner_provider = for_task(config.modification_planner_llm_provider,
+                                provider(config.ollama_modification_planner_model))
+    ollama_writer = provider(config.ollama_writing_model)
+    writer_provider = for_task(config.writing_llm_provider, ollama_writer)
+    composer_provider = for_task(config.page_composition_llm_provider,
+                                 provider(config.ollama_page_composition_model))
+    separate = config.ollama_continue_model and config.ollama_continue_model != config.ollama_model
+    continue_provider = for_task(config.continue_llm_provider,
+                                 provider(config.ollama_continue_model) if separate else None)
+    question_provider = (ollama_writer if config.page_question_llm_provider == "ollama"
+                         else for_task(config.page_question_llm_provider, writer_provider))
+    meters = {"intent": intent_provider, "planner": planner_provider, "writing": writer_provider,
+              "composition": composer_provider, "question": question_provider}
+    if continue_provider is not None:
+        meters["continue"] = continue_provider
+    providers = list({id(item): item for item in [*meters.values(), ollama_writer]}.values())
     return SimpleNamespace(intents=IntentService(intent_provider), pages=PageIntentService(intent_provider),
                            planner=ModificationPlannerService(planner_provider), provider=provider,
-                           providers=[intent_provider, planner_provider])
+                           writer_provider=writer_provider, composer_provider=composer_provider,
+                           continue_provider=continue_provider, question_provider=question_provider,
+                           meters=meters, providers=providers)
+
+
+def meter_snapshot(services: Any) -> dict[int, dict[str, Any]]:
+    return {id(item): item.report() for item in services.providers}
+
+
+def meter_usage(services: Any, before: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    used = []
+    for item in services.providers:
+        now, then = item.report(), before.get(id(item))
+        delta = {key: (round(now[key] - then[key], 2) if then else now[key])
+                 for key in ("calls", "seconds", "promptTokens", "completionTokens")}
+        if delta["calls"]:
+            delta["secondsPerCall"] = round(delta["seconds"] / delta["calls"], 2)
+            tasks = [name for name, meter in services.meters.items() if meter is item]
+            used.append({"provider": now["provider"], "model": now["model"], "tasks": tasks, **delta})
+    return used
 
 
 async def close_services(services: Any) -> None:

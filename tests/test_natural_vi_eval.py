@@ -245,6 +245,97 @@ def test_holdout_sentences_are_natural_and_complete() -> None:
     assert bad == 0
 
 
+DEV2 = "evaluation.natural_vi_dev2_forms"
+
+
+def dev2_bank() -> dict:
+    if importlib.util.find_spec(DEV2) is None:
+        pytest.skip("dev2 forms not written yet")
+    return importlib.import_module(DEV2).BANK
+
+
+def test_dev2_expectations_point_at_real_blocks() -> None:
+    from scripts.evaluate_natural_vi import DEV2_SEED
+
+    bank = dev2_bank()
+    assert fixture_mismatches(bank, bank["contexts"], bank["question_contexts"], DEV2_SEED) == 0
+
+
+def test_dev2_is_separate_from_dev_and_holdout() -> None:
+    from scripts.evaluate_natural_vi import DEV2_SEED
+
+    bank = dev2_bank()
+    sentences = {case["instruction"] for cases in generate(bank, DEV2_SEED).values() for case in cases}
+    dev = {case["instruction"] for cases in generate(DEV_BANK, DEV_SEED).values() for case in cases}
+    assert len(bank_words(bank) & bank_words(DEV_BANK)) == 0
+    assert len(sentences & dev) == 0
+    if importlib.util.find_spec(HOLDOUT) is not None:
+        held = importlib.import_module(HOLDOUT).BANK
+        held_sentences = {case["instruction"] for cases in generate(held, 4242).values() for case in cases}
+        assert len(bank_words(bank) & bank_words(held)) == 0
+        assert len(sentences & held_sentences) == 0
+
+
+@pytest.mark.parametrize("seed", [20261114, 777])
+def test_dev2_sentences_are_natural_and_complete(seed: int) -> None:
+    sets = generate(dev2_bank(), seed)
+    assert sorted(len(cases) for cases in sets.values()) == [100, 100, 100, 100]
+    assert sum(problems(cases) for cases in sets.values()) == 0
+
+
+def test_dev2_keeps_the_cases_that_must_stop() -> None:
+    from scripts.evaluate_natural_vi import DEV2_SEED
+
+    sets = generate(dev2_bank(), DEV2_SEED)
+    assert any(case["expect"].get("refuse") for case in sets["modify"])
+    assert any(case["expect"].get("ask") for case in sets["modify"])
+    assert any(case["expect"].get("refuse") for case in sets["compose"])
+    assert any(case["expect"].get("ask") for case in sets["writing"])
+
+
+def test_each_split_has_its_bank_and_seed(monkeypatch) -> None:
+    from scripts import evaluate_natural_vi as runner
+
+    monkeypatch.setattr(runner, "load_seed", lambda path: 99)
+    assert runner.split_bank("dev") == (DEV_BANK, DEV_SEED, False)
+    assert runner.split_bank("holdout")[1:] == (99, True)
+    if importlib.util.find_spec(DEV2) is not None:
+        assert runner.split_bank("dev2") == (importlib.import_module(DEV2).BANK, runner.DEV2_SEED, False)
+
+
+@pytest.mark.parametrize(("row", "expect", "stage"), [
+    ({"intent": "UNCLEAR", "failed": []}, {}, "intent:UNCLEAR"),
+    ({"intent": "CREATE_PAGE", "failed": ["title"]}, {}, "kiem_tra:title"),
+    ({"intent": "CREATE_PAGE", "failed": []}, {}, "dung"),
+    ({"intent": "CREATE_PAGE", "failed": []}, {"refuse": True}, "nhap_khi_phai_chan"),
+    ({"intent": "OTHER", "failed": []}, {"refuse": True}, "dung"),
+    ({"intent": None, "failed": [], "error": "system:InvalidLLMResponseError"}, {}, "system:InvalidLLMResponseError"),
+])
+def test_compose_stage(row, expect, stage) -> None:
+    from scripts.evaluate_natural_vi import compose_stage
+
+    assert compose_stage(row, expect) == stage
+
+
+def test_modify_rows_carry_where_they_stop() -> None:
+    from scripts import evaluate_natural_vi as runner
+
+    async def fake_run_cases(cases, services, probe, contexts, **options):
+        return [{"id": "m1", "usedModel": False, "stop": "nestjs:INVALID_TARGET", "failed": [], "intent": "MODIFY_PAGE",
+                 "pageTitle": None}]
+
+    data = {"pages": {"p": "Trang"}, "decoys": [], "open_page": "Mở"}
+    contexts = {"p": {"page": {"title": "Trang"}}}
+    original = runner.run_cases
+    runner.run_cases = fake_run_cases
+    try:
+        once = runner._modify_once(data, None, None, contexts)
+        rows = asyncio.run(once([{"id": "m1", "page": "p", "expect": {"op": "INSERT_BLOCKS"}}]))
+    finally:
+        runner.run_cases = original
+    assert rows[0]["stage"] == "nestjs:INVALID_TARGET"
+
+
 def test_final_outcome_takes_the_majority_of_an_ordinary_case() -> None:
     assert final_outcome([OK, DRAFT, OK], must_stop=False) == OK
     assert final_outcome([DRAFT, OK, DRAFT], must_stop=False) == DRAFT

@@ -1,11 +1,12 @@
 import re
 from typing import Any, Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEVELOPMENT_INTERNAL_TOKEN = "development-only-token"
+TaskProvider = Literal["ollama", "gemini"]
 
 
 class Settings(BaseSettings):
@@ -65,14 +66,47 @@ class Settings(BaseSettings):
     ollama_embedding_num_gpu: int | None = Field(default=0, ge=0)
     ollama_embedding_timeout_seconds: float = Field(default=60.0, gt=0)
 
+    writing_llm_provider: TaskProvider | None = None
+    continue_llm_provider: TaskProvider | None = None
+    page_composition_llm_provider: TaskProvider | None = None
+    modification_planner_llm_provider: TaskProvider | None = None
+    page_question_llm_provider: TaskProvider | None = None
+
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_timeout_seconds: float = Field(default=60.0, gt=0)
+    gemini_thinking_level: Literal["MINIMAL", "LOW", "MEDIUM", "HIGH"] | None = "MINIMAL"
+    gemini_thinking_tokens: int = Field(default=1024, ge=0)
+    gemini_max_retries: int = Field(default=2, ge=0)
+
     @model_validator(mode="before")
     @classmethod
     def protect_token_in_validation_errors(cls, values: Any) -> Any:
         # BaseSettings builds its own input mapping. Wrap before any field or
         # model can fail so even ValidationError.json() redacts the secret.
-        if isinstance(values, dict) and isinstance(values.get("ai_internal_token"), str):
-            values["ai_internal_token"] = SecretStr(values["ai_internal_token"])
+        if isinstance(values, dict):
+            for name in ("ai_internal_token", "gemini_api_key"):
+                if isinstance(values.get(name), str):
+                    values[name] = SecretStr(values[name])
         return values
+
+    @field_validator("gemini_thinking_level", mode="before")
+    @classmethod
+    def empty_thinking_level_is_none(cls, value: Any) -> Any:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    def task_uses_gemini(self) -> bool:
+        return "gemini" in (
+            self.writing_llm_provider, self.continue_llm_provider, self.page_composition_llm_provider,
+            self.modification_planner_llm_provider, self.page_question_llm_provider,
+        )
+
+    @model_validator(mode="after")
+    def require_gemini_key(self) -> "Settings":
+        if self.task_uses_gemini() and not self.gemini_api_key.get_secret_value().strip():
+            raise ValueError("GEMINI_API_KEY is required when a task uses the gemini provider.")
+        return self
 
     @model_validator(mode="after")
     def validate_internal_token(self) -> "Settings":

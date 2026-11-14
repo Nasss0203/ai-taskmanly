@@ -1,8 +1,21 @@
 from app.core.config import Settings
 from app.llm.base import EmbeddingProvider, LLMProvider
 from app.llm.providers.fake import FakeEmbeddingProvider, FakeLLMProvider
+from app.llm.providers.gemini import GeminiProvider
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.providers.ollama_embedding import OllamaEmbeddingProvider
+
+
+def create_gemini_provider(settings: Settings) -> GeminiProvider:
+    return GeminiProvider(
+        api_key=settings.gemini_api_key.get_secret_value(),
+        model_name=settings.gemini_model,
+        timeout_seconds=settings.gemini_timeout_seconds,
+        base_url=settings.gemini_base_url,
+        thinking_level=settings.gemini_thinking_level,
+        thinking_tokens=settings.gemini_thinking_tokens,
+        max_retries=settings.gemini_max_retries,
+    )
 
 
 def create_llm_provider(settings: Settings) -> LLMProvider:

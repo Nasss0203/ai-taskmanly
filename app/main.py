@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.llm.base import LLMProvider
-from app.llm.factory import create_embedding_provider, create_llm_provider
+from app.llm.factory import create_embedding_provider, create_gemini_provider, create_llm_provider
 from app.modules.embedding.services.embedding_service import EmbeddingService
 from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
@@ -146,7 +146,23 @@ async def lifespan(application: FastAPI):
 
         application.state.settings = settings
 
-        writing_provider = (
+        gemini_providers: list[LLMProvider] = []
+
+        def for_task(choice: str | None, current: LLMProvider | None) -> LLMProvider | None:
+            if choice != "gemini":
+                return current
+            if not gemini_providers:
+                gemini_providers.append(create_gemini_provider(settings))
+                exit_stack.push_async_callback(gemini_providers[0].close)
+            return gemini_providers[0]
+
+        continue_provider = for_task(settings.continue_llm_provider, continue_provider)
+        page_composition_provider = for_task(settings.page_composition_llm_provider, page_composition_provider)
+        modification_planner_provider = for_task(
+            settings.modification_planner_llm_provider, modification_planner_provider
+        )
+
+        ollama_writing_provider = (
             get_or_create_ollama_provider(
                 settings.ollama_writing_model,
                 settings.ollama_num_gpu,
@@ -154,11 +170,17 @@ async def lifespan(application: FastAPI):
             if settings.llm_provider == "ollama" and settings.ollama_writing_model
             else provider
         )
+        writing_provider = for_task(settings.writing_llm_provider, ollama_writing_provider)
+        question_provider = (
+            ollama_writing_provider
+            if settings.page_question_llm_provider == "ollama"
+            else for_task(settings.page_question_llm_provider, writing_provider)
+        )
         application.state.writing_service = WritingService(
             writing_provider,
             continue_provider,
         )
-        application.state.page_question_service = PageQuestionService(writing_provider)
+        application.state.page_question_service = PageQuestionService(question_provider)
 
         application.state.page_composition_service = (
             PageCompositionService(
