@@ -9,7 +9,7 @@ from app.modules.intent.prompts.intent_prompt import build_intent_prompt
 from app.modules.intent.schemas.intent_schema import IntentExtraction, IntentRequest, IntentResponse, IntentResult
 from app.modules.intent.services.intent_rules import (
     PAGE_WORD, creation_evidence, deterministic_result, directive_text, edit_evidence,
-    inline_source, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result,
+    inline_source, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result, says_new_page,
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
@@ -86,11 +86,11 @@ class IntentService:
         if classification.intent == 'CREATE_PAGE':
             if creation_evidence(source):
                 return result('CREATE_PAGE')
-            new_page = (PAGE_WORD.search(directive_text(source)) and not request.pageTitles
+            new_page = (says_new_page(source) and not request.pageTitles
                         and not edit_evidence(request) and not names_page_as_place(source))
             return result('CREATE_PAGE') if new_page else result('UNCLEAR')
         if classification.intent == 'MODIFY_PAGE':
-            if creation_evidence(source) or not (edit_evidence(request) or request.pageTitles):
+            if creation_evidence(source) or not edit_evidence(request):
                 return result('UNCLEAR')
             action = writing_action(source, selected=selected)
             has_page = bool(PAGE_WORD.search(directive_text(source)))

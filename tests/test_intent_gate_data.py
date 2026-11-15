@@ -59,8 +59,41 @@ def test_an_edit_command_is_never_turned_into_a_new_page() -> None:
     assert read("thêm việc gọi điện cho thợ vào trang Kho cũ", model("CREATE_PAGE"))[0] != "CREATE_PAGE"
 
 
-def test_content_first_edit_of_a_real_page() -> None:
-    assert read(CONTENT_FIRST, model("MODIFY_PAGE"), titles=["Ôn thi cuối kỳ"])[0] == "MODIFY_PAGE"
+def test_a_real_title_alone_does_not_make_an_edit() -> None:
+    assert read(CONTENT_FIRST, model("MODIFY_PAGE"), titles=["Ôn thi cuối kỳ"])[0] == "UNCLEAR"
+
+
+@pytest.mark.parametrize(("instruction", "title"), [
+    ("trang Dã ngoại Cần Giờ có việc nào chưa đánh dấu không nha", "Dã ngoại Cần Giờ"),
+    ("bạn ơi theo trang Quán cà phê góc phố quán có thể phải thuê thêm gì", "Quán cà phê góc phố"),
+    ("chia sẻ trang CLB nhiếp ảnh cho mọi người trong nhóm", "CLB nhiếp ảnh"),
+    ("khoá trang Tiệm bánh Mây không cho ai sửa", "Tiệm bánh Mây"),
+])
+def test_questions_and_whole_page_actions_are_not_edits(instruction, title) -> None:
+    assert read(instruction, model("MODIFY_PAGE"), titles=[title])[0] != "MODIFY_PAGE"
+
+
+@pytest.mark.parametrize("instruction", [
+    "công khai trang Chuyến đi Phú Quốc tháng Tư lên mạng",
+    "chia sẻ trang Kho cũ cho nhóm",
+    "khoá trang Kho cũ",
+    "tóm tắt nội dung trang Kho cũ",
+    "thêm tiêu đề Câu hỏi còn mở vào trang Kho cũ",
+    "mình muốn xoá trang Kho cũ",
+])
+def test_only_a_new_page_is_created(instruction) -> None:
+    assert read(instruction, model("CREATE_PAGE"))[0] != "CREATE_PAGE"
+
+
+@pytest.mark.parametrize("instruction", [
+    NEW_PAGE,
+    "trang mới Kế hoạch dọn kho gồm các việc mua thùng, thuê xe",
+    "trang Quản lý kho cần một bảng Hàng nhập với các cột Tên hàng, Ngày nhập, tạo giúp mình",
+    "mình đang cần một trang để lên kế hoạch ôn thi trong hai tuần",
+    "lập giúp mình trang Sổ tay nấu ăn có các mục Món chính, Tráng miệng",
+])
+def test_a_page_said_to_be_new_is_created(instruction) -> None:
+    assert read(instruction, model("CREATE_PAGE"))[0] == "CREATE_PAGE"
 
 
 def test_content_first_edit_without_a_real_page_asks() -> None:

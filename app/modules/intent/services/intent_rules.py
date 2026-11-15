@@ -199,6 +199,24 @@ def names_page_as_place(source: str) -> bool:
     return bool(PLACE_PAGE.search(directive_text(source)))
 
 
+NEW_PAGE = re.compile(
+    r'\b(?:tao|lap|lam|soan)\b(?:\s+\w+){0,3}\s+(?:trang|page)\b'
+    r'|\b(?:trang|page)\b.*,\s*(?:tao|lap)\b'
+    r'|\b(?:trang|page)\s+moi\b|\bnew page\b'
+    r'|\b(?:can|muon|xin)\s+(?:co\s+)?(?:them\s+)?(?:mot\s+|1\s+)?(?:cai\s+)?(?:trang|page)\b'
+)
+WHOLE_PAGE_ACTION = re.compile(
+    r'\b(?:cong khai|chia se|khoa|mo khoa|xoa|doi ten|di chuyen|sao chep|nhan ban|xuat|dang len|gui|luu tru|'
+    r'share|publish|lock|unlock|delete|remove|rename|move|copy|duplicate|export|archive)\b'
+    r'(?:\s+\w+){0,2}\s+(?:trang|page)\b'
+)
+
+
+def says_new_page(source: str) -> bool:
+    text = directive_text(mark_other_words(source))
+    return bool(NEW_PAGE.search(text)) and not WHOLE_PAGE_ACTION.search(text)
+
+
 def named_languages(source: str) -> set[str]:
     text = directive_text(source)
     return {canonical for canonical, aliases in LANGUAGES.items()
