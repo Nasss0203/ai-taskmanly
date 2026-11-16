@@ -24,17 +24,20 @@ WRITE_VERB = pattern("verb_write")
 INSERT_VERB = pattern("verb_insert")
 CREATE_VERB = pattern("verb_create_page")
 VERB = rf"(?:{INSERT_VERB}|{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{WRITE_VERB})"
+LOOSE_INSERT = rf"{pattern('verb_insert_loose')}(?! (?:chu|de|nho|lai|am|danh)\b)"
+LEAD_VERB = rf"(?:{VERB}|{LOOSE_INSERT})"
 KIND = r"(?:to-do|todo|to-dos|todos|heading|tieu de|checklist|doan van|doan|dong|trich dan|ghi chu|viec|task|tasks|muc)"
 LET_ME_WORDS = pattern("let_me")
 
 # S2: requests wrapped in polite words.
 LEAD = re.compile(rf"^(?:{pattern('lead', 'lead_short')}\s*,?\s+)+")
-POLITE_LEAD = re.compile(rf"^(?:{pattern('lead', 'lead_ask')}|{pattern('lead_short')}(?=\s+{VERB}\b))\s*,?\s+")
+POLITE_LEAD = re.compile(rf"^(?:{pattern('lead', 'lead_ask')}|{pattern('lead_short')}(?=\s+{LEAD_VERB}\b))\s*,?\s+")
 # "mình cần / tôi muốn thêm …": only before a verb ("mình cần một trang" creates a Page).
-WANT = re.compile(rf"^{pattern('want')} (?={VERB}\b)")
+WANT = re.compile(rf"^{pattern('want')} (?={LEAD_VERB}\b)")
 LET_ME = re.compile(
-    rf"^{LET_ME_WORDS} (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{INSERT_VERB}|{CREATE_VERB})\b)"
+    rf"^{LET_ME_WORDS} (?=(?:{EDIT_VERB}|{DELETE_VERB}|{TICK_VERB}|{INSERT_VERB}|{CREATE_VERB}|{LOOSE_INSERT})\b)"
 )
+LEAD_BEFORE_LOOSE_INSERT = re.compile(rf"^(?:{pattern('want')}|{LET_ME_WORDS}) (?={LOOSE_INSERT}\b)")
 GIVE_PAGE = re.compile(
     rf"^{LET_ME_WORDS} (?:mot (?:trang|page)(?: moi)?(?: (?:co ten|ten))?"
     r"|(?:trang|page) (?:moi(?: (?:co ten|ten))?|co ten|ten)) (?=\S)"
@@ -65,7 +68,7 @@ CREATE_PAGE = re.compile(
 CREATE_START = re.compile(rf"^{pattern('verb_create_page', 'verb_create_page_en')}(?: (?:mot|a|an|new))? (?:trang|page)\b")
 LIST_OPENER_LONG = re.compile(rf"\b{pattern('list_opener_long')}\b")
 # "xoá giúp mình …", "sửa giúp tôi …": the help words after the verb.
-HELP_AFTER_VERB = re.compile(rf"^({VERB}) {pattern('help_after_verb')}(?= |:|,)")
+HELP_AFTER_VERB = re.compile(rf"^({LEAD_VERB}) {pattern('help_after_verb')}(?= |:|,)")
 TICK_WORD = re.compile(r"(?:^|(?<=, ))(?:(?P<untick>untick|bo tick)|tick off|check off|tick)(?= )")
 # "xoá cái A đi": "cái" names nothing.
 THING_AFTER_VERB = re.compile(rf"^({DELETE_VERB}|{TICK_VERB}) cai ")
@@ -238,6 +241,7 @@ def strip_polite(instruction: str) -> str:
     while previous != text:
         previous = text
         text = _sub(text, POLITE_LEAD, lambda m, f: "")
+        text = _sub(text, LEAD_BEFORE_LOOSE_INSERT, lambda m, f: "")
         tail = TAIL.search(Folded(text).value)
         if tail and "nhà" not in Folded(text).original(*tail.span()).casefold():
             text = _sub(text, TAIL, lambda m, f: "")

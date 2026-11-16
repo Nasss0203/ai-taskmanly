@@ -336,6 +336,66 @@ def test_modify_rows_carry_where_they_stop() -> None:
     assert rows[0]["stage"] == "nestjs:INVALID_TARGET"
 
 
+def test_modify_rows_carry_who_made_the_draft() -> None:
+    from scripts import evaluate_natural_vi as runner
+
+    async def fake_run_cases(cases, services, probe, contexts, **options):
+        return [{"id": "m1", "usedModel": False, "stop": "draft", "failed": ["texts"], "intent": "MODIFY_PAGE",
+                 "pageTitle": "Trang", "plannerModel": "explicit-content-v1",
+                 "nestjs": {"stage": "admitted", "relaxedOnly": True}}]
+
+    data = {"pages": {"p": "Trang"}, "decoys": [], "open_page": "Mở"}
+    contexts = {"p": {"page": {"title": "Trang"}}}
+    original = runner.run_cases
+    runner.run_cases = fake_run_cases
+    try:
+        once = runner._modify_once(data, None, None, contexts)
+        rows = asyncio.run(once([{"id": "m1", "page": "p", "expect": {"op": "INSERT_BLOCKS"}}]))
+    finally:
+        runner.run_cases = original
+    assert rows[0]["plannerModel"] == "explicit-content-v1"
+    assert rows[0]["relaxedOnly"] is True
+
+
+def test_nestjs_learns_who_made_the_draft() -> None:
+    sent = []
+
+    class Planner:
+        async def process(self, request):
+            plan = {"status": "PLAN_READY", "operations": []}
+            return SimpleNamespace(result=SimpleNamespace(model_dump=lambda mode: plan), provider="ollama", model="m")
+
+    def probe(items):
+        sent.append(items)
+        stage = "admitted" if items and "plan" not in items[0] else "admitted"
+        return {item["id"]: {"stage": stage, "status": "PLAN_GENERATED", "pageTitle": "Hội họp tuần"} for item in items}
+
+    intent = SimpleNamespace(result=SimpleNamespace(intent="MODIFY_PAGE"), provider="deterministic")
+    page = SimpleNamespace(result=SimpleNamespace(model_dump=lambda mode: {"referenceType": "TITLE", "instruction": "thêm việc A"}),
+                           provider="deterministic", model="rules")
+
+    class Static:
+        def __init__(self, value):
+            self.value = value
+
+        async def process(self, request):
+            return self.value
+
+    services = SimpleNamespace(intents=Static(intent), pages=Static(page), planner=Planner())
+    cases = [{"id": "m1", "page": "meeting", "instruction": "thêm việc A vào trang Hội họp tuần", "expect": {"op": "INSERT_BLOCKS"}}]
+    asyncio.run(run_cases(cases, services, probe, CONTEXTS))
+    assert sent[-1][0]["planProvider"] == "ollama"
+
+
+def test_a_refused_edit_stops_with_the_reason_nestjs_gives() -> None:
+    from scripts.evaluate_end_to_end import stop_point
+
+    row = {"intent": "MODIFY_PAGE", "nestjs": {"stage": "refused", "status": "UNSUPPORTED_OPERATION", "why": "GENERIC"}}
+    assert stop_point(row) == "nestjs:UNSUPPORTED_OPERATION:GENERIC"
+    row["nestjs"].pop("why")
+    assert stop_point(row) == "nestjs:UNSUPPORTED_OPERATION"
+
+
 def test_compose_sends_the_real_titles_found_in_the_sentence() -> None:
     from scripts.evaluate_natural_vi import _compose_once
     from tests.fakes.fake_async_llm_provider import FakeLLMProvider
@@ -639,6 +699,24 @@ def test_holdout_summary_holds_no_sentence() -> None:
     summary = summarize(RESULTS, hide_sentences=True)
     assert SECRET_SENTENCE not in str(summary)
     assert "h1" not in str(summary)
+
+
+def test_holdout_summary_counts_where_wrong_drafts_come_from() -> None:
+    def row(id_, group, outcome, last):
+        return {"id": id_, "group": group, "instruction": SECRET_SENTENCE, "outcome": outcome, "stable": True,
+                "allOk": outcome == OK, "runs": 3, "attempts": [last]}
+
+    rows = [row("h1", "checklist", DRAFT, {"stage": "draft", "failed": ["texts"],
+                                           "plannerModel": "explicit-content-v1", "relaxedOnly": False}),
+            row("h2", "checklist", DRAFT, {"stage": "draft", "failed": ["texts"],
+                                           "plannerModel": "explicit-content-v1", "relaxedOnly": False}),
+            row("h3", "tick", DRAFT, {"stage": "intent:PAGE_QUESTION", "failed": []}),
+            row("h4", "checklist", OK, {"stage": "dung", "failed": [], "plannerModel": "qwen3:4b-instruct",
+                                        "relaxedOnly": True}),
+            row("h5", "add_text", ASK, {"stage": "planner-ask", "failed": [], "plannerModel": "qwen3:4b-instruct"})]
+    summary = summarize({"modify": rows}, hide_sentences=True)
+    assert summary["modify"]["draftSources"] == {"checklist|explicit-content-v1|texts|False": 2, "tick|||": 1}
+    assert SECRET_SENTENCE not in str(summary) and "h1" not in str(summary)
 
 
 def test_seed_is_made_once_and_never_printed(tmp_path, capsys) -> None:

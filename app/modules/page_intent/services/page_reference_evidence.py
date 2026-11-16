@@ -41,6 +41,9 @@ EDIT_PREPOSITION = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 POLITE_TAIL = pattern("tail", "tail_marked_only", marked=True)
+# Kế hoạch dùng Gemini (A4b): the polite words NestJS drops after a real Page (A4).
+AFTER_PAGE_TAIL = pattern("tail", "tail_marked_only", "loose_tail", "help_after_verb", "write_help_after_verb",
+                          "place_tail_extra", marked=True)
 EDIT_VERB = re.compile(
     rf"^(?:{pattern('lead', 'want', marked=True)}\s+)*"
     r"(?:thêm|chèn|sửa|chỉnh|chỉnh sửa|cập nhật|đổi|xóa|xoá|"
@@ -100,7 +103,7 @@ ENGLISH_TRAILING_PAGE = (
     ),
 )
 PAGE_END_PLACE = re.compile(
-    r"^(?P<edit>.+?)\s+(?P<place>(?:(?:vào|vao|ở|o|tại|tai)\s+)?(?:cuối|cuoi|đầu|dau))\s*$",
+    r"^(?P<edit>.+?)\s+(?P<place>(?:(?:vào|vao|ở|o|tại|tai|xuống|xuong)\s+)?(?:cuối|cuoi|đầu|dau))\s*$",
     re.IGNORECASE | re.DOTALL,
 )
 ENGLISH_END_OF_PAGE = re.compile(
@@ -551,7 +554,9 @@ def known_title_reference(source: str, titles: tuple[str, ...]) -> PageReference
     marker_start, end, title = spans[0]
     before = text[:marker_start]
     after = text[end:].strip().lstrip(",;:.").strip()
-    rest = re.sub(rf"\s*{POLITE_TAIL}[.!?\s]*$", "", after, flags=re.IGNORECASE).strip(" .!?")
+    rest = re.sub(rf"(?:[\s,]*(?<!\w){AFTER_PAGE_TAIL}(?!\w))+[.!?\s]*$", "", after, flags=re.IGNORECASE).strip(" .!?")
+    if not rest:
+        after = ""
     edit = TITLE_PREPOSITION.sub("", before).strip()
     if not rest:
         instruction = _source_instruction(text, marker_start) or (edit if _edit_clause(edit) else None)

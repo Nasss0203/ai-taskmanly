@@ -56,5 +56,11 @@
   "write_style_expand": ["dài", "chi tiết", "rõ", "kỹ"],
   "language_prep": ["sang", "qua", "ra", "to", "into"],
   "language_noun": ["bản dịch", "bản", "bằng"],
-  "inline_lead_filler": ["câu", "đoạn"]
+  "inline_lead_filler": ["câu", "đoạn"],
+  "page_place_words": ["vào", "trong", "ở", "tại", "của", "lên", "khỏi", "xuống", "dưới cùng", "cuối", "đầu", "phía cuối", "cuối cùng", "phía dưới", "phía trên"],
+  "place_tail_extra": ["luôn"],
+  "count_words": ["một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười"],
+  "verb_insert_loose": ["ghi"],
+  "object_content_extra": ["câu"],
+  "object_label_extra": ["đề mục"]
 }

@@ -179,6 +179,13 @@ def _count(results: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+def _draft_source(row: dict[str, Any]) -> str:
+    last = row["attempts"][-1]
+    relaxed = last.get("relaxedOnly")
+    return "|".join([row["group"], last.get("plannerModel") or "", ",".join(last.get("failed") or []),
+                     "" if relaxed is None else str(relaxed)])
+
+
 def summarize(results: dict[str, list[dict[str, Any]]], hide_sentences: bool) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     for name, rows in results.items():
@@ -191,6 +198,9 @@ def summarize(results: dict[str, list[dict[str, Any]]], hide_sentences: bool) ->
                 stages.setdefault(row["group"], Counter())[stage] += 1
         if stages:
             entry["stages"] = {group: dict(counts) for group, counts in sorted(stages.items())}
+        sources = Counter(_draft_source(row) for row in rows if row["outcome"] == DRAFT)
+        if sources:
+            entry["draftSources"] = dict(sorted(sources.items()))
         if not hide_sentences:
             entry["unstable"] = [row["id"] for row in rows if not row["stable"]]
             entry["problems"] = [{key: row[key] for key in ("id", "group", "outcome", "outcomes", "instruction")}
@@ -223,6 +233,7 @@ def _modify_once(data: dict[str, Any], services: Any, probe: Callable, contexts:
         rows = await run_cases(cases, services, probe, contexts, pages=pages, current_page_id=open_id, titles=probe)
         return [{"id": row["id"], "usedModel": row["usedModel"], "stop": row["stop"], "failed": row["failed"],
                  "intent": row.get("intent"), "pageTitle": row.get("pageTitle"), "stage": row["stop"],
+                 "plannerModel": row.get("plannerModel"), "relaxedOnly": (row.get("nestjs") or {}).get("relaxedOnly"),
                  "outcome": modify_outcome(row, by_id[row["id"]]["expect"], contexts[by_id[row["id"]]["page"]]["page"]["title"])}
                 for row in rows]
 

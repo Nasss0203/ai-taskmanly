@@ -21,24 +21,30 @@ POLITE_TAIL = re.compile(
 # A page end is a place, not a Page target: cut it before TARGET reads "… to … page".
 PAGE_END = re.compile(
     r"\s+(?:(?:at|to)\s+the\s+(?:end|top|bottom|start)\s+of\s+(?:the|this)\s+page"
-    r"|(?:ở|o|vào|vao)\s+(?:cuối|cuoi|đầu|dau)\s+trang(?:\s+(?:này|nay))?)\s*[.!]*$",
+    r"|(?:ở|o|vào|vao|xuống|xuong)\s+(?:cuối|cuoi|đầu|dau)\s+trang(?:\s+(?:này|nay))?"
+    r"|(?:(?:xuống|xuong|ở|o|vào|vao)\s+)?(?:dưới cùng|duoi cung|cuối cùng|cuoi cung|phía cuối|phia cuoi)"
+    r"(?:\s+(?:của\s+|cua\s+)?trang(?:\s+(?:này|nay))?)?)\s*[.!]*$",
     re.IGNORECASE,
 )
 
-INSERT = re.compile(r"^(?:thêm|them|chèn|chen|bổ sung|bo sung|ghi thêm|ghi them|add|insert|append)\s+",
+_LOOSE_INSERT = (rf"(?:{pattern('verb_insert_loose', marked=True)}|{pattern('verb_insert_loose')})"
+                 r"(?!\s+(?:chú|chu|đè|de|nhớ|nho|lại|lai|âm|am|danh)\b)")
+INSERT = re.compile(rf"^(?:thêm|them|chèn|chen|bổ sung|bo sung|ghi thêm|ghi them|add|insert|append|{_LOOSE_INSERT})\s+",
                     re.IGNORECASE)
-_QTY = r"(?:(?:một|mot|vài|vai|các|cac|những|nhung|a|an|the|new|mới|moi|another|\d+)\s+)*"
+_COUNT = rf"{pattern('count_words', marked=True)}|{pattern('count_words')}"
+_QTY = rf"(?:(?:một|mot|vài|vai|các|cac|những|nhung|a|an|the|new|mới|moi|another|\d+|{_COUNT})\s+)*"
 # Longest spellings first; "checklist" may follow a one-word name ("a QA checklist").
 _KINDS = (
     # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
     # S1: "with todos a, b" / "với các to-do a, b": a plural kind lists its items.
     ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|danh sach viec|việc cần làm|"
              r"viec can lam|danh sách|danh sach|to-dos|todos"),
-    ("HEADER", r"heading|tiêu đề|tieu de"),
+    ("HEADER", rf"heading|tiêu đề|tieu de|{pattern('object_label_extra', marked=True)}|{pattern('object_label_extra')}"),
     ("TODO", r"to-do|todo|việc|viec"),
     ("QUOTE", r"trích dẫn|trich dan|quote"),
-    ("TEXT", r"đoạn văn bản|doan van ban|đoạn văn|doan van|đoạn|doan|paragraph|text|dòng chữ|dong chu|dòng|dong|"
-             r"line|ghi chú|ghi chu"),
+    ("TEXT", r"đoạn văn bản|doan van ban|đoạn văn|doan van|đoạn ghi chú|doan ghi chu|dòng ghi chú|dong ghi chu|"
+             r"đoạn chữ|doan chu|đoạn|doan|paragraph|text|dòng chữ|dong chu|dòng|dong|"
+             rf"line|ghi chú|ghi chu|{pattern('object_content_extra', marked=True)}|{pattern('object_content_extra')}"),
 )
 _KIND = "|".join(pattern for _, pattern in _KINDS)
 OBJECT = re.compile(
@@ -83,6 +89,9 @@ TASK_LIST = re.compile(
     r"|^(?:các|cac|những|nhung)\s+(?:công việc|cong viec|việc|viec)\s+sau(?:\s+(?:đây|day))?(?=\s*:)",
     re.IGNORECASE,
 )
+_TASKS_AFTER = r"^(?:các|cac|những|nhung)\s+(?:công việc|cong viec|việc|viec)\s+sau(?:\s+(?:đây|day))?"
+TASK_LIST_LISTED = re.compile(rf"{_TASKS_AFTER}\s+(?=[^,:]+,)", re.IGNORECASE)
+TASK_LIST_UNSURE = re.compile(rf"{_TASKS_AFTER}\s+(?=[^:]*$)", re.IGNORECASE)
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 STRIP = " .,!;:"
 
@@ -195,7 +204,8 @@ def parse_explicit_blocks(instruction: str) -> list[tuple[str, str]] | None:
     if verb is None:
         return None
     body = TASK_LIST.sub("to-do list", text[verb.end():], count=1)
-    if TABLE.search(body):
+    body = TASK_LIST_LISTED.sub("to-do list gồm ", body, count=1)
+    if TABLE.search(body) or TASK_LIST_UNSURE.match(body):
         return None
     blocks: list[tuple[str, str]] = []
     for clause in CLAUSE.split(body):

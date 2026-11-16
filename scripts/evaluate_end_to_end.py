@@ -110,7 +110,7 @@ def stop_point(row: dict[str, Any]) -> str:
         return f"intent:{row['intent']}"
     nest = row.get("nestjs") or {}
     if nest.get("stage") == "refused":
-        return f"nestjs:{nest.get('status')}"
+        return f"nestjs:{nest.get('status')}" + (f":{nest['why']}" if nest.get("why") else "")
     if nest.get("stage") == "clarify":
         return f"nestjs-ask:{nest.get('reason') or nest.get('status')}"
     if nest.get("stage") != "admitted":
@@ -190,7 +190,7 @@ async def run_cases(cases: list[dict[str, Any]], services: Any, probe: Callable[
             plan = response.result.model_dump(mode="json")
             row.update(plan=plan, planStatus=plan.get("status"), plannerModel=response.model)
             row["usedModel"] = row["usedModel"] or used_model(response.provider)
-            second_items.append({**items_by_id[row["id"]], "plan": plan})
+            second_items.append({**items_by_id[row["id"]], "plan": plan, "planProvider": response.provider})
         except Exception as exc:
             row["error"] = error_stop(exc)
         row["seconds"] = round(row["seconds"] + perf_counter() - started, 2)
