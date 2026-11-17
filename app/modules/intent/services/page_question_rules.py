@@ -40,8 +40,31 @@ TODO_WORDS = re.compile(
     r"con (?:lai )?(?:gi|nhung gi|viec gi|viec nao|muc nao|to-?do nao|bao nhieu)|con viec|"
     r"unfinished|not done|not finished|left to do|still open|done yet|completed)\b"
 )
-TODO_ASKED_WORDS = re.compile(r"\b(?:con sot|xong roi|lam duoc)\b")
-ASK_CUE = re.compile(r"\?|\b(?:nao|gi|chua|khong|may|bao nhieu|liet ke)\b")
+TODO_ASKED_WORDS = re.compile(
+    r"\b(?:con sot|xong roi|lam duoc|con (?:bao|may) viec|con lai|xong het|dang do|con thieu viec|hoan thanh duoc)\b"
+)
+ASK_CUE = re.compile(
+    r"\?|\b(?:nao|gi|may|bao nhieu|bao viec|liet ke|what|which|how many|list|show|any)\b|\b(?:chua|khong)$"
+)
+TODO_LIST_ASK = re.compile(rf"^(?:{LEAD}\s+)*(?:nhung|cac)\s+viec\s+(?:con lai|chua xong|da xong|chua lam)\b")
+QUESTION_TAIL = re.compile(
+    rf"(?:\s+(?:{pattern('tail', 'trailing_with', 'trailing_go')}|vay|the|nhi|a|ha|nhe|nha|ma|dau))+$|\s*\?+$"
+)
+SUMMARY_AFTER = re.compile(
+    r"(?:,?\s*(?:no|trang nay)\s+)?(?:(?:dang|chu yeu|da|thi)\s+)*"
+    r"(?:(?:noi|viet|ghi)(?:\s+(?:cai|nhung))?\s+gi|co(?:\s+nhung)?(?:\s+(?:y|noi dung|thong tin))?\s+gi|"
+    r"noi dung chinh(?:\s+la\s+gi)?|la\s+ve\s+(?:cai\s+)?gi)"
+)
+SUMMARY_BEFORE = re.compile(r"\b(?:noi dung|diem|y) chinh (?:cua )?(?:trang|page)\b")
+SUMMARY_ASK = re.compile(
+    rf"^(?:(?:{LEAD}|cho (?:minh|toi|em))\s+)*(?:diem qua|doc qua|giai thich ngan(?: gon)?|(?:cai nhin |xem )?tong quan)"
+    r"(?:\s+(?:ve|cua))?\s+(?:trang|page)\b"
+)
+ONE_TASK_ASKED = re.compile(r"^(?P<task>.+?)\s+(?:o|trong|tai)\s+(?:trang|page)\s+.+?\s+(?:da\s+)?xong\s+(?:het\s+)?chua$")
+COMMA_EDIT = re.compile(rf",\s*(?:{LEAD}\s+)?(?:bo tich|tich|danh dau|xoa|sua|them|doi)\b")
+ASKED_ITEM = re.compile(r"\b(?:viec|muc|to-?do) (?:nao|gi)\b|\bnhung (?:viec|gi)\b")
+NAMED_TASK = re.compile(r"\b(?:việc|to-do|todo)\s+(?=\w)", re.IGNORECASE)
+TASK_END = re.compile(r"\s+(?:ở|trong|tại|của)\s+trang\b|\s+trang\b|[,?.!]|$", re.IGNORECASE)
 COUNT_WORDS = re.compile(
     r"\b(?:bao nhieu|how many|dem|may (?:viec|dong|hang|muc|tasks?|nguoi|cai|ban ghi|cong viec))\b"
 )
@@ -121,28 +144,71 @@ def _references(text: Folded, titles: tuple[str, ...] = ()) -> tuple[str | None,
     return page, database, current, titled
 
 
+def _without_task_names(source: str) -> str:
+    """The sentence with named to-dos ("việc Gọi khách") blanked: their words ask nothing."""
+    text = unicodedata.normalize("NFC", source)
+    for start in reversed([match.end() for match in NAMED_TASK.finditer(text)]):
+        if text[start:start + 1].isupper():
+            end = TASK_END.search(text, start)
+            text = text[:start] + "X" + text[end.start():]
+    return " ".join(fold(text).split())
+
+
+def _asks(text: str) -> bool:
+    return bool(ASK_CUE.search(QUESTION_TAIL.sub("", text)) or ASK_CUE.search(text) and "?" in text)
+
+
+def _after_page(folded: str, page: str | None, current: bool) -> str | None:
+    if page:
+        name = " ".join(fold(unicodedata.normalize("NFC", page)).split())
+        found = folded.find(name)
+        return None if found < 0 else folded[found + len(name):]
+    if current:
+        found = re.search(r"\b(?:trang|page) (?:nay|hien tai|dang mo)\b", folded)
+        return folded[found.end():] if found else None
+    return None
+
+
+def _whole_page_summary(folded: str, page: str | None, current: bool) -> bool:
+    after = _after_page(folded, page, current)
+    if after is None:
+        return False
+    after = QUESTION_TAIL.sub("", after).strip(" ,")
+    if SUMMARY_ASK.match(folded) and not after:
+        return True
+    if SUMMARY_BEFORE.search(folded) and re.fullmatch(r"la gi", after):
+        return True
+    return SUMMARY_AFTER.fullmatch(after) is not None
+
+
 def page_question(source: str, *, has_current_page: bool, titles: tuple[str, ...] = ()) -> PageQuestion | None:
     text = Folded(unicodedata.normalize("NFC", source).strip())
     folded = " ".join(text.value.split())
     if not folded or FIND_ONLY.search(folded) or HOW_TO.match(folded) or HISTORY.search(folded):
         return None
-    if EDIT_START.match(folded) or EDIT_START.match(fold(command_text(source)).strip()):
+    if EDIT_START.match(folded) or COMMA_EDIT.search(folded):
+        return None
+    if EDIT_START.match(fold(command_text(source)).strip()) and not ASKED_ITEM.search(folded):
         return None
     page, database, current, titled = _references(text, titles)
     named = bool(page or database or current)
     if not named and not has_current_page:
         return None
-    if SUMMARY_WORDS.search(folded):
+    masked = _without_task_names(source)
+    asking = _asks(masked)
+    if SUMMARY_WORDS.search(folded) or not database and _whole_page_summary(folded, page, current):
         if not named:
             return None
         kind = "SUMMARY"
     elif database and COUNT_WORDS.search(folded):
         kind = "DATABASE_COUNT"
-    elif TODO_WORDS.search(folded) or TODO_ASKED_WORDS.search(folded) and ASK_CUE.search(folded):
+    elif ONE_TASK_ASKED.match(QUESTION_TAIL.sub("", folded)) and not ASKED_ITEM.search(folded):
+        kind = "FREE"
+    elif (TODO_WORDS.search(folded) or TODO_ASKED_WORDS.search(folded)) and asking or TODO_LIST_ASK.match(folded):
         kind = "TODO_STATUS"
     elif COUNT_WORDS.search(folded) and re.search(r"\b(?:dong|hang|row|rows|ban ghi|record)\b", folded):
         kind = "DATABASE_COUNT"
-    elif named and (QUESTION_WORDS.search(folded) or titled and TITLED_QUESTION_WORDS.search(folded)):
+    elif named and (QUESTION_WORDS.search(masked) or titled and TITLED_QUESTION_WORDS.search(folded)):
         kind = "FREE"
     else:
         return None

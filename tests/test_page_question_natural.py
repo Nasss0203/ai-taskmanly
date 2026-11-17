@@ -81,3 +81,53 @@ def test_done_without_a_done_choice_names_the_values() -> None:
                                                             "position": "0"}]
     response = ask("DATABASE_COUNT", "bảng Tasks có mấy việc đã xong", context, database="Tasks")
     assert response.facts["rowCount"] is None and '"To do"' in response.answer
+
+
+def titled(sentence: str):
+    from app.modules.intent.schemas.intent_schema import IntentRequest
+    from app.modules.intent.services.intent_rules import deterministic_result
+    return deterministic_result(IntentRequest(instruction=sentence, pageTitles=["Hội họp tuần"]))
+
+
+@pytest.mark.parametrize(("sentence", "kind"), [
+    ("trang Hội họp tuần viết gì vậy", "SUMMARY"),
+    ("trang Hội họp tuần có gì", "SUMMARY"),
+    ("trang Hội họp tuần nội dung chính là gì", "SUMMARY"),
+    ("điểm chính của trang Hội họp tuần là gì", "SUMMARY"),
+    ("tóm lại trang Hội họp tuần nói gì", "SUMMARY"),
+    ("trang Hội họp tuần đang ghi những gì", "SUMMARY"),
+    ("trang Hội họp tuần có những ý gì", "SUMMARY"),
+    ("trang Hội họp tuần là về cái gì", "SUMMARY"),
+    ("điểm qua trang Hội họp tuần", "SUMMARY"),
+    ("giải thích ngắn trang Hội họp tuần", "SUMMARY"),
+    ("đọc qua trang Hội họp tuần giúp mình", "SUMMARY"),
+    ("cho mình cái nhìn tổng quan trang Hội họp tuần", "SUMMARY"),
+    ("trang Hội họp tuần nói gì về ngân sách", "FREE"),
+    ("trang Hội họp tuần ghi gì về phòng họp", "FREE"),
+    ("trang Hội họp tuần còn mấy việc", "TODO_STATUS"),
+    ("trang Hội họp tuần còn bao việc", "TODO_STATUS"),
+    ("trang Hội họp tuần việc nào chưa tích", "TODO_STATUS"),
+    ("những việc còn lại ở trang Hội họp tuần", "TODO_STATUS"),
+    ("trang Hội họp tuần xong hết chưa", "TODO_STATUS"),
+    ("việc gì ở trang Hội họp tuần còn dang dở", "TODO_STATUS"),
+    ("trang Hội họp tuần còn thiếu việc gì", "TODO_STATUS"),
+    ("trang Hội họp tuần hoàn thành được mấy việc rồi", "TODO_STATUS"),
+    ("trang Hội họp tuần còn việc nào chưa xong", "TODO_STATUS"),
+    ("Gọi khách ở trang Hội họp tuần xong chưa", "FREE"),
+])
+def test_more_natural_page_questions(sentence, kind) -> None:
+    result = titled(sentence)
+    assert result is not None and (result.intent, result.questionKind) == ("PAGE_QUESTION", kind)
+
+
+@pytest.mark.parametrize("sentence", [
+    "việc Gọi khách ở trang Hội họp tuần đã xong rồi đó nha",
+    "trang Hội họp tuần việc Đặt phòng chưa làm xong",
+    "Đặt phòng ở trang Hội họp tuần chưa xong mà",
+    "việc Đặt phòng ở trang Hội họp tuần chưa xong đâu, bỏ tích giúp",
+    "trang Hội họp tuần việc Gọi khách xong rồi",
+    "việc Nào cũng được ở trang Hội họp tuần đã xong rồi",
+])
+def test_a_statement_about_one_task_is_no_question(sentence) -> None:
+    result = titled(sentence)
+    assert result is None or result.intent != "PAGE_QUESTION"
