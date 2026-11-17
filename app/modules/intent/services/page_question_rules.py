@@ -40,14 +40,19 @@ TODO_WORDS = re.compile(
     r"con (?:lai )?(?:gi|nhung gi|viec gi|viec nao|muc nao|to-?do nao|bao nhieu)|con viec|"
     r"unfinished|not done|not finished|left to do|still open|done yet|completed)\b"
 )
-COUNT_WORDS = re.compile(r"\b(?:bao nhieu|how many|so luong|dem)\b")
+TODO_ASKED_WORDS = re.compile(r"\b(?:con sot|xong roi|lam duoc)\b")
+ASK_CUE = re.compile(r"\?|\b(?:nao|gi|chua|khong|may|bao nhieu|liet ke)\b")
+COUNT_WORDS = re.compile(
+    r"\b(?:bao nhieu|how many|dem|may (?:viec|dong|hang|muc|tasks?|nguoi|cai|ban ghi|cong viec))\b"
+)
 SUMMARY_WORDS = re.compile(
-    r"\b(?:tom tat|tom luoc|tong ket|summari[sz]e|summary of|noi ve (?:cai )?gi|co (?:nhung )?noi dung gi|"
+    r"\b(?:tom tat|tom luoc|tong ket|summari[sz]e|summary of|(?:noi|viet) ve (?:cai |dieu |chuyen )?gi|"
+    r"chu yeu noi ve|co (?:nhung )?noi dung gi|"
     r"what is .+ about|what's .+ about)\b"
 )
 QUESTION_WORDS = re.compile(
-    r"\?\s*$|\b(?:ai|gi|nao|bao gio|khi nao|luc nao|o dau|the nao|bao nhieu|la ai|co .+ khong|"
-    r"who|what|when|where|which|how|is there|are there|does|do)\b"
+    r"\?\s*$|^(?:does|do)\b|\b(?:ai|gi|nao|bao gio|khi nao|luc nao|o dau|the nao|bao nhieu|la ai|co .+ khong|"
+    r"who|what|when|where|which|how|is there|are there)\b"
 )
 TITLED_QUESTION_WORDS = re.compile(r"\b(?:may gio|thu may|ngay may|luc may|bao lau)\b")
 FIND_ONLY = re.compile(r"\b(?:tim (?:mot |1 |cai )?(?:trang|page)|(?:trang|page) nao|which page|find (?:the )?page)\b")
@@ -133,7 +138,7 @@ def page_question(source: str, *, has_current_page: bool, titles: tuple[str, ...
         kind = "SUMMARY"
     elif database and COUNT_WORDS.search(folded):
         kind = "DATABASE_COUNT"
-    elif TODO_WORDS.search(folded):
+    elif TODO_WORDS.search(folded) or TODO_ASKED_WORDS.search(folded) and ASK_CUE.search(folded):
         kind = "TODO_STATUS"
     elif COUNT_WORDS.search(folded) and re.search(r"\b(?:dong|hang|row|rows|ban ghi|record)\b", folded):
         kind = "DATABASE_COUNT"

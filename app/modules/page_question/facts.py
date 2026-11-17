@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -7,7 +8,7 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiPageContextDatabase,
     AiPageContextDatabaseProperty,
 )
-from app.modules.modification_planner.services.sentence_text import text_key
+from app.modules.modification_planner.services.sentence_text import fold, text_key
 from app.shared.vi_vocabulary import pattern
 
 MAX_LISTED = 10
@@ -17,8 +18,15 @@ UNFINISHED = re.compile(
     r"left|pending|open|remaining)\b"
 )
 FINISHED = re.compile(r"\b(?:da xong|da lam xong|da hoan thanh|da tich|xong roi|completed|finished|done)\b")
+DONE_CHOICES = {"done", "xong", "da xong", "hoan thanh", "da hoan thanh", "completed", "finished"}
+OPEN_CHOICES = {"to do", "todo", "chua lam", "chua bat dau", "not started", "can lam"}
+PERSON_TYPES = {"TEXT", "PEOPLE", "PERSON"}
+NOT_A_PERSON = {"bảng", "trang", "table", "page", "mình", "tôi", "tớ", "bạn", "ai", "nó", "em", "anh", "chị", "họ"}
+PERSON_ASKED = re.compile(
+    r"(?:của|giao cho)\s+(?P<after>[^\s,.!?]+)|(?P<before>[^\s,.!?]+)\s+(?:phụ trách|đang giữ|lo)\b", re.IGNORECASE,
+)
 ASKED_VALUE = re.compile(
-    r"\b(?:bao nhieu|how many)\s+(?:viec|dong|hang|task|tasks|row|rows|muc|ban ghi|records?|items?|cong viec)\s+"
+    r"\b(?:bao nhieu|how many|may)\s+(?:viec|dong|hang|task|tasks|row|rows|muc|ban ghi|records?|items?|cong viec)\s+"
     r"(?:(?:are|is|o trang thai|co trang thai|trang thai|dang o|dang|la)\s+)?(?P<value>.+?)"
     r"(?:\s+(?:trong|o|in|of|tai|cua)\b.*)?$"
 )
@@ -124,6 +132,84 @@ def _has_value(value: Any, option_id: str, option_name: str) -> bool:
     return value in names
 
 
+def _choices(database: AiPageContextDatabase) -> list[tuple[AiPageContextDatabaseProperty, str, str]]:
+    return [(prop, option.id, option.name) for prop in database.properties if prop.type in VALUE_TYPES
+            for option in prop.options]
+
+
+def _texts(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _people(database: AiPageContextDatabase) -> dict[str, tuple[AiPageContextDatabaseProperty, str]]:
+    found: dict[str, tuple[AiPageContextDatabaseProperty, str]] = {}
+    for prop in database.properties:
+        if prop.type in PERSON_TYPES:
+            for row in database.rows:
+                for name in _texts(row.values.get(prop.id)):
+                    if text_key(name):
+                        found.setdefault(text_key(name), (prop, name.strip()))
+    return found
+
+
+def _person_named(name: str, question: str) -> bool:
+    question = unicodedata.normalize("NFC", question)
+    if fold(question) == question.casefold():
+        return _named_in(name, text_key(question))
+    shown = re.escape(unicodedata.normalize("NFC", name).casefold())
+    return re.search(rf"(?<!\w){shown}(?!\w)", question.casefold()) is not None
+
+
+def _counted(database: AiPageContextDatabase, total: int, note: str, data: dict[str, Any], label: str,
+             matches) -> tuple[str, dict[str, Any]]:
+    count = sum(1 for row in database.rows if matches(row))
+    data["rowCount"] = count
+    return f'Bảng "{database.name}" có {count} dòng {label} (trên tổng {total} dòng).{note}', data
+
+
+def _no_value(database: AiPageContextDatabase, data: dict[str, Any], asked: str) -> tuple[str, dict[str, Any]]:
+    options = [name for _, _, name in _choices(database)]
+    known = (" Các giá trị có trong bảng: " + ", ".join(f'"{name}"' for name in options[:10]) + ".") if options else ""
+    data["rowCount"] = None
+    return f'Bảng "{database.name}" không có giá trị "{asked}".{known}', data
+
+
+def _natural_count(
+    database: AiPageContextDatabase, question: str, total: int, note: str, data: dict[str, Any],
+) -> tuple[str, dict[str, Any]] | None:
+    key = text_key(question)
+    named = [choice for choice in _choices(database) if _named_in(choice[2], key)]
+    if len({choice[1] for choice in named}) == 1:
+        prop, option_id, option_name = named[0]
+        return _counted(database, total, note, data, f"{prop.name} = {option_name}",
+                        lambda row: _has_value(row.values.get(prop.id), option_id, option_name))
+    people = _people(database)
+    asked_people = [name for name, (_, shown) in people.items() if _person_named(shown, question)]
+    if len(asked_people) == 1:
+        prop, name = people[asked_people[0]]
+        return _counted(database, total, note, data, f"{prop.name} = {name}",
+                        lambda row: asked_people[0] in {text_key(item) for item in _texts(row.values.get(prop.id))})
+    person = PERSON_ASKED.search(unicodedata.normalize("NFC", question))
+    name = (person.group("after") or person.group("before")) if person else ""
+    if name and not asked_people and name.casefold() not in NOT_A_PERSON \
+            and text_key(name) not in {text_key(word) for word in database.name.split()}:
+        return _no_value(database, data, name)
+    finished, unfinished = bool(FINISHED.search(key)), bool(UNFINISHED.search(key))
+    if finished == unfinished:
+        return None
+    wanted = DONE_CHOICES if finished else OPEN_CHOICES
+    chosen = [choice for choice in _choices(database) if text_key(choice[2]) in wanted]
+    if len({choice[1] for choice in chosen}) != 1:
+        return _no_value(database, data, "đã xong" if finished else "chưa xong")
+    prop, option_id, option_name = chosen[0]
+    return _counted(database, total, note, data, f"{prop.name} = {option_name}",
+                    lambda row: _has_value(row.values.get(prop.id), option_id, option_name))
+
+
 def database_answer(
     context: AiPageContext, question: str, reference: str | None,
 ) -> tuple[str, dict[str, Any]]:
@@ -142,7 +228,10 @@ def database_answer(
     note = (f" (AI chỉ đọc được {len(rows)}/{total} dòng; số trên chỉ tính phần đã đọc.)"
             if completeness and completeness.truncated else "")
     data: dict[str, Any] = {"databaseFound": True, "database": database.name, "rowTotal": total}
-    asked = ASKED_VALUE.search(POLITE_TAIL.sub("", text_key(question)))
+    natural = _natural_count(database, question, total, note, data)
+    if natural is not None:
+        return natural
+    asked =ASKED_VALUE.search(POLITE_TAIL.sub("", text_key(question)))
     value = asked.group("value").strip() if asked else ""
     if not value or NOT_A_VALUE.match(value) or _named_in(database.name, value):
         data["rowCount"] = total
