@@ -33,17 +33,25 @@ STRUCTURE = re.compile(r"toggle|gập|thu gọn|bảng|database|table|cột|colu
 # P4: "->" and unmarked "gom" read as "gồm".
 # "phần mềm", "mục tiêu" are words of their own, not "a section".
 _SECTION_WORD = r"(?:phần(?!\s+(?:mềm|thưởng|cứng|trăm)\b)|mục(?!\s+tiêu\b)|chương|sections?|headings?)"
+COUNT_WORDS = {"một": 1, "hai": 2, "ba": 3, "bốn": 4, "tư": 4, "năm": 5, "sáu": 6, "bảy": 7, "tám": 8, "chín": 9,
+               "mười": 10}
+_COUNT = r"\d+|" + "|".join(COUNT_WORDS)
+_TASK_WORD = r"(?:việc|viec|to-?dos?|nhiệm vụ|nhiem vu|tasks?)"
 MARKER = re.compile(
     r"(?:^|\s)(?:bao gồm|gồm|bao gom|gom|with|có)\s+|\s*:\s*|\s*(?:->|→|=>)\s*"
     # Bước 5 (bỏ dấu hai chấm): "Kế hoạch Q1 3 phần Mục tiêu, …", "biên bản họp với các mục …".
-    rf"|\s+(?=(?:với\s+)?(?:\d+|các|những)\s+{_SECTION_WORD}\s)",
+    rf"|\s+(?=(?:với\s+)?(?:{_COUNT}|các|những)\s+{_SECTION_WORD}\s)"
+    rf"|,?\s+(?=chia\s+(?:thành\s+|làm\s+)?(?:{_COUNT})\s+{_SECTION_WORD}\s)"
+    rf"|\s+(?=với\s+(?:{_COUNT}|các|những)\s+{_TASK_WORD}\s+[^,]+,)",
     re.IGNORECASE,
 )
 # P2: "gồm 3 phần: a, b, c" / "gồm các mục: …" names sections; the count is no content.
 COUNTED_SECTIONS = re.compile(
-    rf"^(?:với\s+)?(?:(?P<count>\d+)\s+|(?:các|những)\s+)?(?P<kind>{_SECTION_WORD})(?:\s*:\s*|\s+(?=\S+[^,]*,))",
+    rf"^(?:(?:với|chia(?:\s+(?:thành|làm))?)\s+)?(?:(?P<count>{_COUNT})\s+|(?:các|những)\s+)?(?P<kind>{_SECTION_WORD})"
+    r"(?:\s*:\s*|\s+(?=\S+[^,]*,))",
     re.IGNORECASE,
 )
+TITLE_END = re.compile(r"(?:,|\s+và)\s+trong đó$", re.IGNORECASE)
 # P4 (DT2): listed items with no word for what they are become to-dos when short.
 SHORT_ITEM_WORDS = 6
 DESCRIBED = re.compile(
@@ -55,8 +63,17 @@ TASK_HEAD = re.compile(r"checklist|check list|to-?do|việc|nhiệm vụ|task|k�
 SECTION_HEAD = re.compile(r"(?:mục|phần|heading|tiêu đề|sections?|headings?)\s*$", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
 TASK_LIST = re.compile(
-    r"^(?:(?:các|những|cac|nhung)\s+)?(?:việc|viec|to-?dos?|nhiệm vụ|nhiem vu|tasks?)\s*:\s*", re.IGNORECASE,
+    r"^(?:(?:các|những|cac|nhung)\s+)?(?:việc|viec|to-?dos?|nhiệm vụ|nhiem vu|tasks?)\s*:\s*"
+    rf"|^với\s+(?:(?:các|những)\s+|(?P<count>{_COUNT})\s+)?{_TASK_WORD}\s+(?=[^,:]+,)",
+    re.IGNORECASE,
 )
+
+
+def _count_differs(count: str | None, items: list[str]) -> bool:
+    if not count:
+        return False
+    number = int(count) if count.isdigit() else COUNT_WORDS.get(count.casefold())
+    return number != len(items)
 
 
 def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | None:
@@ -76,14 +93,13 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
     listed = TASK_LIST.match(body)
     if listed:
         items = _list_items(body[listed.end():])
-        if not items or any(":" in item for item in items):
+        if not items or any(":" in item for item in items) or _count_differs(listed.group("count"), items):
             return None
         return title, [("TODO", _show(item, quoted)) for item in items]
     counted = COUNTED_SECTIONS.match(body)
     if counted:
         items = _list_items(body[counted.end():])
-        if not items or any(":" in item for item in items) or (
-                counted.group("count") and int(counted.group("count")) != len(items)):
+        if not items or any(":" in item for item in items) or _count_differs(counted.group("count"), items):
             return None
         return title, [("HEADER", _show(item, quoted)) for item in items]
     restored = PLACEHOLDER.sub(lambda match: quoted[int(match.group(1))], body)
@@ -183,7 +199,7 @@ def _page_title(rest: str) -> str | None:
         return None
     # "gồm:" splits at the colon: "gồm" is still on the title side.
     head = re.sub(r"(?:^|\s+)(?:bao\s+)?(?:gồm|gom)$", "", head, flags=re.IGNORECASE)
-    head = TITLE_TAIL.sub("", head).strip(" .,:")
+    head = TITLE_END.sub("", TITLE_TAIL.sub("", head).strip(" .:")).strip(" .,:")
     return head[:1].upper() + head[1:] if head else None
 
 

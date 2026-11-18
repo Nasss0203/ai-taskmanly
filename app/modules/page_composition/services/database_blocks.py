@@ -20,11 +20,16 @@ from app.modules.page_composition.schemas.page_composition_schema import PageCom
 
 COLUMNS = re.compile(r"\b(?:cột|cot|columns?)\s*:?\s*(?P<list>.+)$", re.IGNORECASE)
 OPTIONS = re.compile(r"\(([^()]*)\)")
-GROUPED_OPTIONS = re.compile(r"\s+(?:bao gồm|bao gom|gồm|gom)\s+(?P<items>[^\x00]+)$", re.IGNORECASE)
+GROUPED_OPTIONS = re.compile(
+    r"\s+(?:bao gồm|bao gom|gồm|gom|(?:(?:có|co)\s+)?(?:(?:các|cac)\s+)?(?:lựa chọn|lua chon)"
+    r"|(?:có|co)(?=\s+[^\x00]*(?:,|\s(?:và|va)\s)))\s+(?P<items>[^\x00]+)$", re.IGNORECASE,
+)
+COLUMN_WORD = re.compile(r"^(?:cột|cot|column)\s+", re.IGNORECASE)
+LIST_TAIL = re.compile(r"\s+(?:với|voi|nha|nhé|nhe|nhá|giúp mình|giùm mình|giúp)$", re.IGNORECASE)
 TABLE_PAGE = re.compile(
     r"^(?:tạo|tao|lập|lap|(?:tôi|toi|mình|minh|em)\s+(?:cần|can|muốn|muon)(?:\s+(?:tạo|tao))?)\s+"
-    r"(?:(?:một|mot|mới|moi)\s+)*trang\s+(?P<title>[^,:]+?)\s+"
-    r"(?:có|co|với|voi)\s+(?:(?:một|mot)\s+)?(?:bảng|bang)\b\s*(?P<table>[^,:]*?)\s*"
+    r"(?:(?:một|mot|mới|moi)\s+)*trang\s+(?P<title>[^,:]+?)(?:,?\s+(?:và\s+)?trong đó)?\s+"
+    r"(?:có|co|với|voi)\s+(?:(?:một|mot)\s+)?(?:bảng|bang)\b\s*(?P<table>[^,:]*?)\s*,?\s*"
     r"(?:(?:với|voi|gồm|gom|có|co)\s+)?(?:(?:các|cac)\s+)?(?:cột|cot)\b",
     re.IGNORECASE,
 )
@@ -67,7 +72,7 @@ def _named_columns(instruction: str) -> list[tuple[str, list[str]]] | None:
     match = COLUMNS.search(unicodedata.normalize("NFC", instruction))
     if match is None:
         return None
-    text = match.group("list").strip(" .")
+    text = LIST_TAIL.sub("", match.group("list").strip(" .")).strip(" .")
     options: list[list[str]] = []
 
     def keep(found: re.Match[str]) -> str:
@@ -82,7 +87,7 @@ def _named_columns(instruction: str) -> list[tuple[str, list[str]]] | None:
     columns = []
     for part in SPLIT.split(hidden):
         marker = re.search(r"\x00(\d+)\x00", part)
-        name = re.sub(r"\x00\d+\x00", "", part).strip()
+        name = COLUMN_WORD.sub("", re.sub(r"\x00\d+\x00", "", part).strip())
         if not name:
             return None
         columns.append((name[:1].upper() + name[1:], options[int(marker.group(1))] if marker else []))

@@ -66,6 +66,11 @@ CREATE_PAGE = re.compile(
     r"(?: (?:mot|cai))* (?=(?:trang|page)\b)"
 )
 CREATE_START = re.compile(rf"^{pattern('verb_create_page', 'verb_create_page_en')}(?: (?:mot|a|an|new))? (?:trang|page)\b")
+CREATE_OPENER = re.compile(
+    r"^(?:(?:bạn ơi|nhờ bạn|giúp mình|bạn)\s*,?\s+)*(?:(?:cho|giúp)\s+(?:mình|tôi|em)\s+làm\s+trang"
+    r"|trang\s+mới\s+(?:có\s+)?tên(?:\s+là)?)\s+",
+    re.IGNORECASE,
+)
 LIST_OPENER_LONG = re.compile(rf"\b{pattern('list_opener_long')}\b")
 # "xoá giúp mình …", "sửa giúp tôi …": the help words after the verb.
 HELP_AFTER_VERB = re.compile(rf"^({LEAD_VERB}) {pattern('help_after_verb')}(?= |:|,)")
@@ -230,6 +235,7 @@ def normalize_edit_instruction(instruction: str) -> str:
 
 def normalize_create_instruction(instruction: str) -> str:
     """For page composition: the normalized sentence only when it creates a Page (P3)."""
+    instruction = CREATE_OPENER.sub("tạo trang ", instruction.strip(), count=1)
     normalized = normalize_instruction(instruction)
     return normalized if CREATE_START.match(Folded(normalized).value) else strip_polite(instruction)
 

@@ -37,7 +37,8 @@ _QTY = rf"(?:(?:một|mot|vài|vai|các|cac|những|nhung|a|an|the|new|mới|moi
 _KINDS = (
     # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
     # S1: "with todos a, b" / "với các to-do a, b": a plural kind lists its items.
-    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc|danh sach viec|việc cần làm|"
+    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc cần làm|danh sach viec can lam|"
+             r"danh sách việc|danh sach viec|việc cần làm|"
              r"viec can lam|danh sách|danh sach|to-dos|todos"),
     ("HEADER", rf"heading|tiêu đề|tieu de|{pattern('object_label_extra', marked=True)}|{pattern('object_label_extra')}"),
     ("TODO", r"to-do|todo|việc|viec"),
