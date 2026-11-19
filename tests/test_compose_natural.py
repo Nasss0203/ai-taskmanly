@@ -58,6 +58,83 @@ def test_a_count_that_does_not_match_is_left_to_the_model(sentence) -> None:
     assert page_of(sentence) is None
 
 
+def todos(*items: str) -> list[tuple[str, str]]:
+    return [("TODO", item) for item in items]
+
+
+@pytest.mark.parametrize(("sentence", "title", "blocks"), [
+    ("mình muốn có trang Chuyển nhà với ba việc thuê xe tải, đóng thùng sách, báo cắt điện nha", "Chuyển nhà",
+     todos("Thuê xe tải", "Đóng thùng sách", "Báo cắt điện")),
+    ("mình muốn có trang Đi Đà Lạt với các việc đặt homestay, thuê xe máy, mua áo ấm", "Đi Đà Lạt",
+     todos("Đặt homestay", "Thuê xe máy", "Mua áo ấm")),
+    ("tôi muốn có trang Thi cuối kỳ gồm ôn chương 3, làm đề cũ, hỏi thầy phần khó", "Thi cuối kỳ",
+     todos("Ôn chương 3", "Làm đề cũ", "Hỏi thầy phần khó")),
+    ("mình cần trang Sửa nhà với các việc gọi thợ điện, mua sơn, dọn phòng khách", "Sửa nhà",
+     todos("Gọi thợ điện", "Mua sơn", "Dọn phòng khách")),
+    ("em muốn một trang Họp phụ huynh với hai việc in phiếu điểm, gửi thư mời", "Họp phụ huynh",
+     todos("In phiếu điểm", "Gửi thư mời")),
+    ("tạo trang mới Học bơi với danh sách mua kính bơi, đăng ký lớp buổi sáng và hỏi giá vé hồ bơi giúp mình",
+     "Học bơi", todos("Mua kính bơi", "Đăng ký lớp buổi sáng", "Hỏi giá vé hồ bơi")),
+    ("tạo trang Dọn nhà với danh sách lau cửa kính, giặt rèm, vứt đồ cũ", "Dọn nhà",
+     todos("Lau cửa kính", "Giặt rèm", "Vứt đồ cũ")),
+    ("tạo trang Mua sắm với checklist mua giày, mua tất, mua balo", "Mua sắm",
+     todos("Mua giày", "Mua tất", "Mua balo")),
+    ("tạo trang Học lái xe với danh sách việc đăng ký học, học lý thuyết, thi thử", "Học lái xe",
+     todos("Đăng ký học", "Học lý thuyết", "Thi thử")),
+    ("tạo trang Gia đình với việc cần làm đón con, nấu cơm và giặt đồ", "Gia đình",
+     todos("Đón con", "Nấu cơm", "Giặt đồ")),
+    ("tạo trang Dự án A, việc phải làm là viết đặc tả, vẽ giao diện và viết test", "Dự án A",
+     todos("Viết đặc tả", "Vẽ giao diện", "Viết test")),
+    ("tạo trang Chuẩn bị Tết, cần làm mấy việc dọn nhà, mua hoa, gói bánh chưng", "Chuẩn bị Tết",
+     todos("Dọn nhà", "Mua hoa", "Gói bánh chưng")),
+    ("tạo trang Văn phòng, các việc gồm in tài liệu, mua mực in, sửa máy lạnh", "Văn phòng",
+     todos("In tài liệu", "Mua mực in", "Sửa máy lạnh")),
+    ("tạo trang Việc nhà, cần làm: rửa bát, lau nhà, đổ rác", "Việc nhà", todos("Rửa bát", "Lau nhà", "Đổ rác")),
+    ("tạo trang Ngày mai với to-do: dậy sớm, chạy bộ, ăn sáng", "Ngày mai", todos("Dậy sớm", "Chạy bộ", "Ăn sáng")),
+    ("tạo trang Mua đồ với danh sách: sữa, trứng, bánh mì", "Mua đồ", todos("Sữa", "Trứng", "Bánh mì")),
+    ("tạo trang Đọc sách với danh sách việc cần làm: mua sách, đọc 20 trang mỗi ngày, ghi chú", "Đọc sách",
+     todos("Mua sách", "Đọc 20 trang mỗi ngày", "Ghi chú")),
+    ("tạo trang Đi chợ có những việc như mua rau, mua thịt, mua trái cây", "Đi chợ",
+     todos("Mua rau", "Mua thịt", "Mua trái cây")),
+    ("tạo trang Đám cưới Lan với những việc cần làm là đặt nhà hàng, in thiệp, chọn váy", "Đám cưới Lan",
+     todos("Đặt nhà hàng", "In thiệp", "Chọn váy")),
+    ("tạo trang Cuối tuần gồm việc đi bơi, việc đọc sách, việc gọi điện cho bố", "Cuối tuần",
+     todos("Đi bơi", "Đọc sách", "Gọi điện cho bố")),
+    ("việc cần làm gồm mua quà sinh nhật, đặt bánh kem và gọi cho bà, lập trang Sinh nhật mẹ để ghi",
+     "Sinh nhật mẹ", todos("Mua quà sinh nhật", "Đặt bánh kem", "Gọi cho bà")),
+    ("việc cần làm: thay dầu xe, bơm lốp, rửa xe, tạo trang Bảo dưỡng xe cho mình", "Bảo dưỡng xe",
+     todos("Thay dầu xe", "Bơm lốp", "Rửa xe")),
+    ("ba việc sửa vòi nước, thay bóng đèn, dọn gác, lập trang Việc cuối tuần để ghi nha", "Việc cuối tuần",
+     todos("Sửa vòi nước", "Thay bóng đèn", "Dọn gác")),
+    ("tạo trang Kế hoạch tuần để ghi các việc nộp báo cáo, họp nhóm, tập gym", "Kế hoạch tuần",
+     todos("Nộp báo cáo", "Họp nhóm", "Tập gym")),
+    ("tạo một trang tên Sổ tay bếp rồi ghi các việc mua dao mới, thay khăn lau, dọn tủ lạnh", "Sổ tay bếp",
+     todos("Mua dao mới", "Thay khăn lau", "Dọn tủ lạnh")),
+    ("giúp mình tạo trang Du lịch Huế ghi các việc đặt vé tàu, đặt khách sạn, tìm quán ăn", "Du lịch Huế",
+     todos("Đặt vé tàu", "Đặt khách sạn", "Tìm quán ăn")),
+    ("tạo trang Học tiếng Anh rồi thêm các việc học 20 từ mới, nghe podcast, viết nhật ký", "Học tiếng Anh",
+     todos("Học 20 từ mới", "Nghe podcast", "Viết nhật ký")),
+    ("tạo trang Thể thao với các việc chạy 5 km và tập tạ", "Thể thao", todos("Chạy 5 km", "Tập tạ")),
+    ("tạo trang Ăn kiêng với checklist bỏ đồ ngọt và uống trà xanh", "Ăn kiêng",
+     todos("Bỏ đồ ngọt", "Uống trà xanh")),
+])
+def test_more_to_do_lists_drafted_by_rule(sentence, title, blocks) -> None:
+    assert page_of(sentence) == (title, blocks)
+
+
+@pytest.mark.parametrize("sentence", [
+    "tạo trang Kế hoạch về cách tiết kiệm tiền, đầu tư và trả nợ",
+    "tạo trang Lên kế hoạch team building cho công ty",
+    "tạo trang Học nhạc với ba việc mua đàn, tìm thầy, tập gam và học bài đầu tiên",
+    "tạo trang Nghỉ hè với danh sách những nơi muốn đi Đà Nẵng, Hội An, Huế",
+    "tạo trang Ăn uống với danh sách các món phở, bún chả, bánh xèo",
+    "tạo trang Sức khoẻ gồm uống đủ nước và ngủ trước 11 giờ",
+    "hai việc sửa vòi nước, thay bóng đèn, dọn gác, lập trang Việc cuối tuần để ghi",
+])
+def test_lists_the_rules_are_unsure_of_stay_with_the_model(sentence) -> None:
+    assert page_of(sentence) is None
+
+
 def test_trong_do_inside_a_title_stays() -> None:
     found = page_of("tạo trang Kế hoạch trong đó ghi mục tiêu quý gồm Doanh thu, Chi phí")
     assert found is None or found[0].startswith("Kế hoạch trong đó")

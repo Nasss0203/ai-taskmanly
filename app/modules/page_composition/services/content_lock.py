@@ -69,6 +69,59 @@ TASK_LIST = re.compile(
 )
 
 
+_LEAD = r"(?:với|có|gồm|bao gồm|(?:(?:rồi|để)\s+)?(?:ghi|thêm)(?:\s+lại)?)"
+_TASKS_NAMED = (
+    r"(?:danh sách|checklist|check list|list|to-?dos?)(?:\s+(?:việc|công việc)(?:\s+(?:cần|phải)\s+làm)?)?"
+    rf"|(?:(?:các|những|mấy)\s+|(?P<count>{_COUNT})\s+)?(?:việc|công việc|nhiệm vụ)(?:\s+(?:cần|phải)\s+làm)?"
+    r"|(?:cần|phải)\s+làm(?:\s+(?:(?:các|những|mấy)\s+)?việc)?"
+)
+TASKS_AFTER_TITLE = re.compile(
+    rf"^(?P<title>[^,:]+?)(?:\s*,\s*(?:{_LEAD}\s+)?|\s+{_LEAD}\s+)(?:{_TASKS_NAMED})"
+    r"(?:\s+(?:gồm|bao gồm|là|như|sau))*\s*(?::\s*|\s+)(?P<items>.+)$",
+    re.IGNORECASE,
+)
+TASKS_BEFORE_TITLE = re.compile(
+    rf"^(?:(?:(?:các|những)\s+|(?P<count>{_COUNT})\s+)việc(?:\s+cần\s+làm)?|việc\s+cần\s+làm"
+    r"|danh sách việc(?:\s+cần\s+làm)?)(?:\s+gồm)?\s*(?::\s*|\s+)(?P<items>.+?)\s*,\s*(?:hãy\s+)?(?:tạo|lập)\s+"
+    r"(?:(?:một|mới)\s+)*trang\s+(?:mới\s+)?(?:(?:có\s+)?tên\s+(?:là\s+)?)?(?P<title>[^,:]+?)"
+    r"(?:\s+(?:để\s+ghi(?:\s+lại)?|cho\s+(?:mình|tôi|em)|với|nha|nhé|nhe|giúp mình|đi))*\s*\.?$",
+    re.IGNORECASE,
+)
+NAMED_TITLE = re.compile(r"^(?:mới\s+)?(?:(?:có\s+)?tên(?:\s+là)?\s+)?", re.IGNORECASE)
+NOT_TASKS = re.compile(r"^(?:các|những|mấy)\s", re.IGNORECASE)
+TASK_PREFIX = re.compile(r"^việc\s+", re.IGNORECASE)
+
+
+def _tasks_first(text: str) -> str:
+    """ "việc cần làm gồm a, b, lập trang X để ghi" as "tạo trang X với các việc a, b"."""
+    match = TASKS_BEFORE_TITLE.match(text)
+    if match is None:
+        return text
+    return f"tạo trang {match.group('title')} với {match.group('count') or 'các'} việc {match.group('items')}"
+
+
+def _task_page(rest: str) -> tuple[str, list[str]] | None:
+    """(title, to-dos) when the words after "trang" name a list of tasks."""
+    hidden, quoted = _hide_quotes(rest)
+    match = TASKS_AFTER_TITLE.match(hidden.strip())
+    if match is None or NOT_TASKS.match(match.group("items")) or MARKER.search(match.group("title")):
+        return None
+    items = _list_items(match.group("items").strip(" ."))
+    if not items or len(items) < 2 or any(":" in item for item in items) or _count_differs(match.group("count"), items):
+        return None
+    if all(TASK_PREFIX.match(item) for item in items[1:]):
+        items = [TASK_PREFIX.sub("", item) for item in items]
+    head = NAMED_TITLE.sub("", match.group("title").strip(" ."))
+    whole = PLACEHOLDER.fullmatch(head)
+    if whole:
+        head = quoted[int(whole.group(1))][1:-1].strip()
+    elif PLACEHOLDER.search(head):
+        return None
+    if not head:
+        return None
+    return head[:1].upper() + head[1:], [_show(item, quoted) for item in items]
+
+
 def _count_differs(count: str | None, items: list[str]) -> bool:
     if not count:
         return False
@@ -205,13 +258,21 @@ def _page_title(rest: str) -> str | None:
 
 def compose_explicit_page(instruction: str) -> PageCompositionDraft | None:
     """A page the sentence fully lists, drafted without the model (F3)."""
-    text = unicodedata.normalize("NFC", instruction).strip()
+    text = _tasks_first(unicodedata.normalize("NFC", instruction).strip())
     verb = PAGE_VERB.match(text)
     if verb is None:
         return None
     rest = text[verb.end():]
     if STRUCTURE.search(_hide_quotes(rest)[0]):
         return None
+    tasks = _task_page(rest)
+    if tasks is not None:
+        return PageCompositionDraft.model_validate({
+            "schemaVersion": 1, "type": "PAGE_COMPOSITION", "page": {"title": tasks[0]},
+            "blocks": [{"ref": f"b{index}", "type": "TODO", "content": {"text": item, "checked": False}}
+                       for index, item in enumerate(tasks[1], 1)],
+            "databases": [],
+        })
     explicit = _explicit_blocks(rest)
     title = _page_title(rest)
     if explicit is None or not title:

@@ -68,6 +68,7 @@ CREATE_PAGE = re.compile(
 CREATE_START = re.compile(rf"^{pattern('verb_create_page', 'verb_create_page_en')}(?: (?:mot|a|an|new))? (?:trang|page)\b")
 CREATE_OPENER = re.compile(
     r"^(?:(?:bạn ơi|nhờ bạn|giúp mình|bạn)\s*,?\s+)*(?:(?:cho|giúp)\s+(?:mình|tôi|em)\s+làm\s+trang"
+    r"|(?:mình|tôi|em)\s+(?:muốn|cần)\s+(?:có\s+)?(?:(?:một|mot)\s+)?trang(?:\s+mới)?"
     r"|trang\s+mới\s+(?:có\s+)?tên(?:\s+là)?)\s+",
     re.IGNORECASE,
 )
