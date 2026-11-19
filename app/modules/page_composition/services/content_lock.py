@@ -13,6 +13,7 @@ import re
 import unicodedata
 
 from app.modules.modification_planner.services.explicit_content import (
+    _KIND,
     _before_position,
     _topic_merged,
     _hide_quotes,
@@ -62,6 +63,7 @@ DESCRIBED = re.compile(
 TASK_HEAD = re.compile(r"checklist|check list|to-?do|việc|nhiệm vụ|task|kế hoạch|plan", re.IGNORECASE)
 SECTION_HEAD = re.compile(r"(?:mục|phần|heading|tiêu đề|sections?|headings?)\s*$", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
+KIND_WORD = re.compile(rf"(?:{_KIND})", re.IGNORECASE)
 TASK_LIST = re.compile(
     r"^(?:(?:các|những|cac|nhung)\s+)?(?:việc|viec|to-?dos?|nhiệm vụ|nhiem vu|tasks?)\s*:\s*"
     rf"|^với\s+(?:(?:các|những)\s+|(?P<count>{_COUNT})\s+)?{_TASK_WORD}\s+(?=[^,:]+,)",
@@ -88,7 +90,10 @@ TASKS_BEFORE_TITLE = re.compile(
     re.IGNORECASE,
 )
 NAMED_TITLE = re.compile(r"^(?:mới\s+)?(?:(?:có\s+)?tên(?:\s+là)?\s+)?", re.IGNORECASE)
-NOT_TASKS = re.compile(r"^(?:các|những|mấy)\s", re.IGNORECASE)
+NOT_TASKS = re.compile(
+    r"^(?:các|những|mấy)\s|^(?:(?:việc|công việc)(?:\s+(?:cần|phải)\s+làm)?|(?:cần|phải)\s+làm)\s*(?:,|$)",
+    re.IGNORECASE,
+)
 TASK_PREFIX = re.compile(r"^việc\s+", re.IGNORECASE)
 
 
@@ -156,7 +161,10 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
             return None
         return title, [("HEADER", _show(item, quoted)) for item in items]
     restored = PLACEHOLDER.sub(lambda match: quoted[int(match.group(1))], body)
-    blocks = parse_explicit_blocks(f"thêm {restored}")
+    named_like_kind = KIND_WORD.fullmatch(body.split(",", 1)[0].strip()) is not None
+    blocks = None if SECTION_HEAD.search(head) or named_like_kind else parse_explicit_blocks(f"thêm {restored}")
+    if blocks and len(blocks) == 1 and blocks[0][0] in ("TEXT", "HEADER", "QUOTE") and "," in blocks[0][1]:
+        return None
     if blocks is None:
         kind = "HEADER" if SECTION_HEAD.search(head) else "TODO" if TASK_HEAD.search(head) else None
         items = _list_items(_before_position(body))
@@ -164,7 +172,8 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
         # "gồm các phần mềm Jira, Slack": a first item much longer than the rest
         # may hold an introduction; the model reads it.
         if kind is None and items and not _topic_merged(_before_position(body)) and all(
-                len(item.split()) <= SHORT_ITEM_WORDS and not DESCRIBED.search(item) for item in items):
+                len(item.split()) <= SHORT_ITEM_WORDS and (KIND_WORD.fullmatch(item) or not DESCRIBED.search(item))
+                for item in items):
             kind = "TODO"
         if not items or kind is None or any(":" in item for item in items):
             return None

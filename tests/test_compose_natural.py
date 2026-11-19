@@ -135,6 +135,43 @@ def test_lists_the_rules_are_unsure_of_stay_with_the_model(sentence) -> None:
     assert page_of(sentence) is None
 
 
+def headers(*items: str) -> list[tuple[str, str]]:
+    return [("HEADER", item) for item in items]
+
+
+@pytest.mark.parametrize("first", [
+    "Việc cần làm", "Danh sách việc", "Ghi chú", "Checklist", "Tiêu đề", "Trích dẫn", "Đoạn văn", "To-do",
+    "Việc đã xong", "Ghi chú cuộc họp",
+])
+def test_a_first_section_named_like_a_block_kind_stays_a_section(first) -> None:
+    assert page_of(f"tạo trang Họp tuần với các mục: {first}, Mục tiêu, Rủi ro") == (
+        "Họp tuần", headers(first, "Mục tiêu", "Rủi ro"))
+
+
+@pytest.mark.parametrize(("sentence", "blocks"), [
+    ("tạo trang Họp tuần gồm: Ghi chú, Mục tiêu, Rủi ro", todos("Ghi chú", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần gồm: Việc cần làm, Mục tiêu, Rủi ro", todos("Việc cần làm", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần gồm Việc cần làm, Mục tiêu, Rủi ro", todos("Việc cần làm", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần gồm Danh sách việc, Mục tiêu, Rủi ro", todos("Danh sách việc", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần gồm: Checklist, Mục tiêu, Rủi ro", todos("Checklist", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần gồm Đoạn văn, Mục tiêu, Rủi ro", todos("Đoạn văn", "Mục tiêu", "Rủi ro")),
+    ("tạo trang Họp tuần với các mục: Mục tiêu, Ghi chú, Rủi ro", headers("Mục tiêu", "Ghi chú", "Rủi ro")),
+    ("tạo trang Họp tuần gồm các phần: Việc cần làm, Mục tiêu và Rủi ro",
+     headers("Việc cần làm", "Mục tiêu", "Rủi ro")),
+])
+def test_a_block_kind_word_alone_is_an_item(sentence, blocks) -> None:
+    assert page_of(sentence) == ("Họp tuần", blocks)
+
+
+@pytest.mark.parametrize("sentence", [
+    "tạo trang Họp tuần gồm: Ghi chú cuộc họp, Mục tiêu, Rủi ro",
+    "tạo trang Họp tuần gồm: Tiêu đề kế hoạch, Mục tiêu, Rủi ro",
+    "tạo trang Họp tuần gồm Đoạn văn mở đầu, Mục tiêu, Rủi ro",
+])
+def test_one_block_or_many_items_is_left_to_the_model(sentence) -> None:
+    assert page_of(sentence) is None
+
+
 def test_trong_do_inside_a_title_stays() -> None:
     found = page_of("tạo trang Kế hoạch trong đó ghi mục tiêu quý gồm Doanh thu, Chi phí")
     assert found is None or found[0].startswith("Kế hoạch trong đó")
