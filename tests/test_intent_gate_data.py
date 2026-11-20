@@ -13,7 +13,7 @@ from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
 SELECTED = "Con mèo nhà mình rất thích nằm phơi nắng"
 NEW_PAGE = "mình cần trang Nhật ký đọc sách có ba phần Rủi ro, Mục tiêu và Ghi chú"
-CONTENT_FIRST = "kiểm tra lại hợp đồng, ghi vào trang Ôn thi cuối kỳ"
+CONTENT_FIRST = "kiểm tra lại hợp đồng, trang Ôn thi cuối kỳ"
 REPHRASED = "bạn chuyển giúp đoạn này thành tiếng Anh nhé"
 
 

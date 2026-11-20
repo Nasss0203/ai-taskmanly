@@ -10,6 +10,8 @@ both are checked against the shared ``evaluation/normalization_cases.json``.
 import re
 from collections.abc import Callable
 
+from app.modules.intent.services.page_question_rules import page_question
+from app.modules.modification_planner.services.command_first import command_first
 from app.modules.modification_planner.services.sentence_text import Folded, command_text
 from app.shared.vi_vocabulary import pattern
 
@@ -155,6 +157,8 @@ def normalize_instruction(instruction: str) -> str:
             text = _sub(text, TRAILING_WITH, lambda m, f: "")
     text = _sub(text, WANT, lambda m, f: "")
     text = _sub(text, LET_ME, lambda m, f: "")
+    if not CREATE_OPENER.match(text) and page_question(text, has_current_page=False) is None:
+        text = command_first(text)
     text = _sub(text, GIVE_PAGE, lambda m, f: "tạo trang ")
     text = _sub(text, DONE_SHORT, lambda m, f: " rồi")
     text = _sub(text, TICK_WORD, lambda m, f: "bỏ tích" if m.group("untick") else "tích")

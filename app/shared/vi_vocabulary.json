@@ -62,5 +62,13 @@
   "count_words": ["một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười"],
   "verb_insert_loose": ["ghi"],
   "object_content_extra": ["câu"],
-  "object_label_extra": ["đề mục"]
+  "object_label_extra": ["đề mục"],
+  "state_tick": ["coi như hoàn thành", "đã hoàn thành", "hoàn thành rồi", "đã làm xong", "làm xong rồi", "xong rồi đó", "xong rồi", "đã xong", "làm xong", "làm rồi"],
+  "state_untick": ["đánh dấu nhầm rồi", "đánh dấu nhầm", "chưa xong"],
+  "state_delete": ["không cần nữa", "không cần", "thừa rồi"],
+  "state_insert": ["còn thiếu", "chưa có", "thiếu"],
+  "verb_insert_said": ["cho vào", "đưa vào", "bỏ vào", "để vào", "cho thêm", "ghi lại", "note lại", "viết thêm", "muốn có", "cần thêm", "cần có", "ghi", "đặt", "note"],
+  "verb_delete_said": ["xoá khỏi", "xóa khỏi", "gạch bỏ", "gạch đi", "bỏ đi", "bỏ ra", "gạch", "bỏ"],
+  "verb_untick_said": ["gỡ dấu tích", "bỏ dấu xong", "bỏ dấu tích"],
+  "remind_lead": ["nhớ là", "nhớ"]
 }

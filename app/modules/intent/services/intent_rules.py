@@ -337,9 +337,27 @@ def edit_evidence(request: IntentRequest) -> bool:
     return bool(command and directive_text(source)[command.end():].strip())
 
 
+COUNTED_LIST = re.compile(
+    r'^(?:them|chen|bo sung|ghi them|ghi)\s+(?P<count>\d+|hai|ba|bon|nam)\s+(?:dong|hang|viec|to-do|todo|muc)\s+'
+    r'(?P<items>.+?)\s+(?:vao|o|trong)\s+(?:bang|trang|phan|muc)\b'
+)
+COUNTS = {'hai': 2, 'ba': 3, 'bon': 4, 'nam': 5}
+
+
+def counted_list(text: str) -> bool:
+    found = COUNTED_LIST.match(text)
+    if found is None or re.search(r'\b(?:roi|sau do|then)\b', text):
+        return False
+    count = found.group('count')
+    items = [item for item in re.split(r'\s*,\s*|\s+va\s+', found.group('items')) if item.strip()]
+    return len(items) == (int(count) if count.isdigit() else COUNTS[count])
+
+
 def multiple_commands(source: str) -> bool:
     # "tích A và Đích đến": a name after "và" is not a command (VERB_SPELLINGS).
     text = directive_text(mark_other_words(source))
+    if counted_list(text):
+        return False
     markers = list(PAGE_WORD.finditer(text))
     if len(markers) > 1 and re.search(r'\b(?:va|and)\s+(?:trang|page)\b(?!\s+thai\b)', text):
         return True
