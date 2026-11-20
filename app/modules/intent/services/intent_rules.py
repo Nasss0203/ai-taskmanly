@@ -90,6 +90,10 @@ OTHER_ACTION = re.compile(
     r'^(?:gui|dang|xoa|chia se|luu|in ra|send|post|share|email|publish|save|delete)\b'
 )
 CREATE_COMMAND = re.compile(r'^(?:tao|create|make|new page|lap ke hoach|soan tai lieu)\b')
+FILL_NEW_PAGE = re.compile(
+    r'^(?:ghi|them|chen|bo sung)(?:\s+(?:vao|lai))?\s+(?:(?:cac|nhung|may|mot so|vai|\d+|hai|ba|bon|nam)\s+)?'
+    r'(?:viec|cong viec|nhiem vu|muc|phan|y|ghi chu)\b'
+)
 LANGUAGES = {
     'English': ('tieng anh', 'english'),
     'Vietnamese': ('tieng viet', 'vietnamese'),
@@ -199,12 +203,21 @@ def names_page_as_place(source: str) -> bool:
     return bool(PLACE_PAGE.search(directive_text(source)))
 
 
+RECENT = r'(?!\s+(?:tao|lap|lam|mo|them|day|nhat|hom|vua|duoc|cap nhat|sua)\b)'
 NEW_PAGE = re.compile(
     r'\b(?:tao|lap|lam|soan)\b(?:\s+\w+){0,3}\s+(?:trang|page)\b'
     r'|\b(?:trang|page)\b.*,\s*(?:tao|lap)\b'
-    r'|\b(?:trang|page)\s+moi\b|\bnew page\b'
+    rf'|\b(?:trang|page)\s+moi\b{RECENT}|\bnew page\b'
     r'|\b(?:can|muon|xin)\s+(?:co\s+)?(?:them\s+)?(?:mot\s+|1\s+)?(?:cai\s+)?(?:trang|page)\b'
+    r'|\blen\s+(?:mot|1)\s+(?:trang|page)\b'
+    r'|\b(?:tao|lap|lam)\s+(?:(?:mot|1|cai)\s+)?(?:bang|database|checklist|check list|ghi chu|tai lieu|so tay)\b'
 )
+BUILT_PAGE = re.compile(r'(?<!\w)(?:dựng|khởi tạo)(?:\s+\w+){0,3}\s+(?:trang|page)(?!\w)')
+NEW_PAGE_TARGET = re.compile(rf'\b(?:vao|trong)\s+(?:mot\s+|1\s+)?(?:cai\s+)?(?:trang|page)\s+moi\b{RECENT}')
+NEW_PAGE_LEAD = re.compile(rf'^(?:them|mo)\s+(?:mot\s+|1\s+)?(?:trang|page)\s+moi\b{RECENT}')
+ASKED_LEAD = re.compile(r'^(?:co the|lam on)\s+')
+ASKED_CREATE = re.compile(r'^(?:ban\s+)?co the\s+(?:\w+\s+){0,2}?(?:tao|lap|soan)\b(?:\s+\w+){0,3}\s+(?:trang|page)\b')
+LIST_OPENER = re.compile(r'(?<!\w)(?:phần|mục|cột|gồm|bao gồm)(?!\w)|:', re.IGNORECASE)
 WHOLE_PAGE_ACTION = re.compile(
     r'\b(?:cong khai|chia se|khoa|mo khoa|xoa|doi ten|di chuyen|sao chep|nhan ban|xuat|dang len|gui|luu tru|'
     r'share|publish|lock|unlock|delete|remove|rename|move|copy|duplicate|export|archive)\b'
@@ -214,7 +227,33 @@ WHOLE_PAGE_ACTION = re.compile(
 
 def says_new_page(source: str) -> bool:
     text = directive_text(mark_other_words(source))
-    return bool(NEW_PAGE.search(text)) and not WHOLE_PAGE_ACTION.search(text)
+    built = BUILT_PAGE.search(unicodedata.normalize('NFC', source).casefold())
+    return bool(NEW_PAGE.search(text) or built) and not WHOLE_PAGE_ACTION.search(text)
+
+
+def unled_text(source: str) -> str:
+    return ASKED_LEAD.sub('', WANT_LEAD.sub('', directive_text(source)))
+
+
+def puts_into_new_page(source: str) -> bool:
+    return bool(NEW_PAGE_TARGET.search(directive_text(mark_other_words(source)))) and says_new_page(source)
+
+
+def opens_new_page(source: str) -> bool:
+    return bool(NEW_PAGE_LEAD.match(unled_text(source))) and says_new_page(source)
+
+
+def asks_to_create(source: str) -> bool:
+    return bool(ASKED_CREATE.match(fold(source).strip())) and says_new_page(source)
+
+
+def lists_named_sections(source: str) -> bool:
+    opener = LIST_OPENER.search(source)
+    if opener is None or '?' in source or not says_new_page(source):
+        return False
+    listed = source[opener.end():]
+    return (',' in listed or bool(re.search(r'\s(?:và|va)\s', listed))) and page_question(
+        source[:opener.start()], has_current_page=False) is None
 
 
 def named_languages(source: str) -> set[str]:
@@ -231,6 +270,8 @@ def result(intent: str, action: str | None = None, language: str | None = None,
 
 def is_read_only(source: str) -> bool:
     text = directive_text(source)
+    if opens_new_page(source):
+        return False
     return is_read_only_page_request(source) or bool(re.match(
         r'^(?:page la gi|trang la gi|cam on|chao\b|hello\b|hi\b|ban la ai|so sanh\b|cach dung\b|lam sao\b)', text,
     )) or bool(re.search(r'\b(?:co bao nhieu|la gi\?|how many)\b', text))
@@ -314,10 +355,14 @@ def multiple_commands(source: str) -> bool:
                 return True
     clauses = re.split(r'\s+(?:roi|sau do|then|and then|va|and)\s+|[;.]\s+(?=[a-z])', text)
     categories = []
-    for clause in clauses:
+    for index, clause in enumerate(clauses):
         action = writing_action(clause)
+        if index == 0:
+            clause = ASKED_LEAD.sub('', WANT_LEAD.sub('', clause))
         if action:
             categories.append(action)
+        elif categories == ['CREATE'] and FILL_NEW_PAGE.match(clause) and not PAGE_WORD.search(clause):
+            continue
         elif CREATE_COMMAND.match(clause):
             content_creation = re.match(
                 r'^(?:tao|create)\s+(?:(?:mot|1|a|an|new)\s+)*(?:dong|hang|row|heading|block|checklist)\b', clause,
@@ -347,7 +392,11 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
     # without an edit, "tìm …" stays a read-only request below.
     if content_page_reference(source) is not None or activity_page_reference(source) is not None:
         return result('MODIFY_PAGE')
-    if not request.selectedText and not inline_source(source):
+    named_new = not request.selectedText and not request.pageTitles and (
+        opens_new_page(source) or puts_into_new_page(source) or asks_to_create(source))
+    if named_new:
+        return result('CREATE_PAGE')
+    if not request.selectedText and not inline_source(source) and not lists_named_sections(source):
         question = page_question(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
         if question is not None and question.kind == 'MIXED':
             return result('UNCLEAR')
@@ -366,7 +415,9 @@ def deterministic_result(request: IntentRequest) -> IntentResult | None:
         evidence = detect_with_titles(source, has_current_page=bool(request.currentPageId), titles=tuple(request.pageTitles))
         missing_current = evidence.reference_type == 'CURRENT_PAGE' and not request.currentPageId
         return result('MODIFY_PAGE', clarify=missing_current or evidence.reference_type == 'UNRESOLVED')
-    if creation_evidence(source) and CREATE_COMMAND.match(text):
+    unled = unled_text(source)
+    if (creation_evidence(source) and CREATE_COMMAND.match(text)
+            or unled != text and creation_evidence(unled) and CREATE_COMMAND.match(unled)):
         return result('CREATE_PAGE')
     action = writing_action(source, selected=bool(request.selectedText))
     if has_page and edit_evidence(request):

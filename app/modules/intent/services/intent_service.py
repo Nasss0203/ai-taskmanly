@@ -8,8 +8,8 @@ from app.llm.base import LLMProvider
 from app.modules.intent.prompts.intent_prompt import build_intent_prompt
 from app.modules.intent.schemas.intent_schema import IntentExtraction, IntentRequest, IntentResponse, IntentResult
 from app.modules.intent.services.intent_rules import (
-    PAGE_WORD, creation_evidence, deterministic_result, directive_text, edit_evidence,
-    inline_source, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result, says_new_page,
+    PAGE_WORD, asks_to_create, creation_evidence, deterministic_result, directive_text, edit_evidence,
+    inline_source, opens_new_page, puts_into_new_page, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result, says_new_page,
     translation_language, unsafe_override, unsupported_request, writing_action,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
@@ -87,7 +87,8 @@ class IntentService:
             if creation_evidence(source):
                 return result('CREATE_PAGE')
             new_page = (says_new_page(source) and not request.pageTitles
-                        and not edit_evidence(request) and not names_page_as_place(source))
+                        and (puts_into_new_page(source) or opens_new_page(source) or asks_to_create(source)
+                             or not edit_evidence(request) and not names_page_as_place(source)))
             return result('CREATE_PAGE') if new_page else result('UNCLEAR')
         if classification.intent == 'MODIFY_PAGE':
             if creation_evidence(source) or not edit_evidence(request):
