@@ -18,7 +18,7 @@ import unicodedata
 from app.modules.modification_planner.services.sentence_text import text_key
 from app.modules.page_composition.schemas.page_composition_schema import PageCompositionDraft
 
-COLUMNS = re.compile(r"\b(?:cột|cot|columns?)\s*:?\s*(?P<list>.+)$", re.IGNORECASE)
+COLUMNS = re.compile(r"\b(?:cột|cot|columns?)\s*:?\s*(?:là\s+)?(?P<list>.+)$", re.IGNORECASE)
 OPTIONS = re.compile(r"\(([^()]*)\)")
 GROUPED_OPTIONS = re.compile(
     r"\s+(?:bao gồm|bao gom|gồm|gom|(?:(?:có|co)\s+)?(?:(?:các|cac)\s+)?(?:lựa chọn|lua chon)"

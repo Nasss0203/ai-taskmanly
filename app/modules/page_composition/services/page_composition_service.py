@@ -25,6 +25,7 @@ from app.modules.page_composition.services.task_blocks import normalize_task_blo
 from app.modules.page_composition.services.content_lock import (
     compose_explicit_page,
     drop_unrequested_databases,
+    keep_user_words,
     lock_composition_content,
 )
 from app.modules.page_composition.validators import (
@@ -160,7 +161,10 @@ class PageCompositionService:
         return PageCompositionResponse(
             result=complete_databases(
                 drop_unrequested_databases(
-                    lock_composition_content(normalize_task_blocks(draft, request.instruction), request.instruction),
+                    keep_user_words(
+                        lock_composition_content(normalize_task_blocks(draft, request.instruction), request.instruction),
+                        request.instruction,
+                    ),
                     request.instruction,
                 ),
                 request.instruction,

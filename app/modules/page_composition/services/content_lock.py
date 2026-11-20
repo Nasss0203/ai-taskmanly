@@ -21,7 +21,7 @@ from app.modules.modification_planner.services.explicit_content import (
     _show,
     parse_explicit_blocks,
 )
-from app.modules.modification_planner.services.sentence_text import Folded
+from app.modules.modification_planner.services.sentence_text import Folded, text_key
 from app.modules.page_composition.schemas.page_composition_schema import PageCompositionDraft
 
 PAGE_VERB = re.compile(
@@ -95,6 +95,24 @@ NOT_TASKS = re.compile(
     re.IGNORECASE,
 )
 TASK_PREFIX = re.compile(r"^việc\s+", re.IGNORECASE)
+LEADING_IS = re.compile(r"^là\s+")
+REPEATED_KIND = re.compile(r"^(phần|mục|việc|bước|cột)\s+(?=\S)")
+TITLE_BREAK = re.compile(r"\s*,\s*|\.\s+")
+LIST_LEAD_AFTER_TITLE = re.compile(
+    r"^(?:nội dung|chia|các|những|gồm|bao gồm|có|cần|trong đó|danh sách|mục|phần|việc|bước|cột|heading|tiêu đề|với|là)"
+    r"(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def _clean_items(items: list[str]) -> list[str]:
+    if items:
+        items = [LEADING_IS.sub("", items[0]), *items[1:]]
+    kinds = {found.group(1) for found in map(REPEATED_KIND.match, items[1:]) if found}
+    if len(items) > 1 and len(kinds) == 1 and all(REPEATED_KIND.match(item) for item in items[1:]):
+        kind = kinds.pop()
+        items = [item[len(kind):].strip() if item.startswith(f"{kind} ") else item for item in items]
+    return items
 
 
 def _tasks_first(text: str) -> str:
@@ -156,7 +174,7 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
         return title, [("TODO", _show(item, quoted)) for item in items]
     counted = COUNTED_SECTIONS.match(body)
     if counted:
-        items = _list_items(body[counted.end():])
+        items = _clean_items(_list_items(body[counted.end():]) or [])
         if not items or any(":" in item for item in items) or _count_differs(counted.group("count"), items):
             return None
         return title, [("HEADER", _show(item, quoted)) for item in items]
@@ -167,7 +185,7 @@ def _explicit_blocks(rest: str) -> tuple[str | None, list[tuple[str, str]]] | No
         return None
     if blocks is None:
         kind = "HEADER" if SECTION_HEAD.search(head) else "TODO" if TASK_HEAD.search(head) else None
-        items = _list_items(_before_position(body))
+        items = _clean_items(_list_items(_before_position(body)) or [])
         # "gồm 4 quý, mỗi quý một heading" describes a structure: the model builds it.
         # "gồm các phần mềm Jira, Slack": a first item much longer than the rest
         # may hold an introduction; the model reads it.
@@ -261,6 +279,10 @@ def _page_title(rest: str) -> str | None:
         return None
     # "gồm:" splits at the colon: "gồm" is still on the title side.
     head = re.sub(r"(?:^|\s+)(?:bao\s+)?(?:gồm|gom)$", "", head, flags=re.IGNORECASE)
+    for found in TITLE_BREAK.finditer(head):
+        if LIST_LEAD_AFTER_TITLE.match(head[found.end():]):
+            head = head[:found.start()]
+            break
     head = TITLE_END.sub("", TITLE_TAIL.sub("", head).strip(" .:")).strip(" .,:")
     return head[:1].upper() + head[1:] if head else None
 
@@ -294,3 +316,125 @@ def compose_explicit_page(instruction: str) -> PageCompositionDraft | None:
         "schemaVersion": 1, "type": "PAGE_COMPOSITION", "page": {"title": title},
         "blocks": blocks, "databases": [],
     })
+
+
+LIST_PIECE = re.compile(r"(\s*[,;:]\s*|\.\s+|\s+(?:và|and)\s+)")
+LIST_LEAD = re.compile(
+    r"(?<!\w)(?:bao gồm|gồm|có|là|với|phần|mục|việc|bước|cột|headings?|tiêu đề|sections?|các|những|như|sau|kèm)(?!\w)"
+)
+PAGE_WORD = re.compile(r"(?<!\w)(?:trang|page)(?!\w)", re.IGNORECASE)
+SECTION_ASKED = re.compile(r"(?<!\w)(?:phần|mục|headings?|tiêu đề|sections?)(?!\w)", re.IGNORECASE)
+NUMBERED_HEAD = re.compile(r"^(?:(?:phần|mục|bước|part|section)\s*\d+|\d+)\s*[:.)\-–]\s*", re.IGNORECASE)
+NAME_FILLER = re.compile(r"(?:\s+(?:nha|nhé|nhe|nhá|giúp mình|giùm mình|cho mình|đi bạn|nha bạn|nhé bạn))+$",
+                         re.IGNORECASE)
+FILLER_WORDS = {"đi", "nha", "nhé", "nhe", "nhá", "giúp", "giùm", "với", "ạ"}
+FILLER_PERSONS = {"mình", "bạn"}
+PERSON_LEADS = {"giúp", "giùm", "cho", "nha", "nhé", "đi"}
+GO_KEPT = {"mang", "đem", "xách", "cầm"}
+
+
+def _listed_names(instruction: str) -> list[str]:
+    hidden, quoted = _hide_quotes(unicodedata.normalize("NFC", instruction).strip().rstrip(".!? "))
+    parts = LIST_PIECE.split(hidden)
+    pieces = [(parts[at].strip(), parts[at + 1].strip() if at + 1 < len(parts) else "") for at in range(0, len(parts), 2)]
+    names: list[str] = []
+    started = False
+    for piece, separator in pieces:
+        if started:
+            names.append(piece)
+            continue
+        page = PAGE_WORD.search(piece)
+        scope = piece[page.end():] if page else piece
+        leads = list(LIST_LEAD.finditer(scope))
+        if separator == ":":
+            started = True
+        elif leads:
+            started = True
+            names.append(scope[leads[-1].end():])
+    cleaned = [NAME_FILLER.sub("", name.strip()).strip() for name in _clean_items(names)]
+    shown = [PLACEHOLDER.sub(lambda found: quoted[int(found.group(1))], name) for name in cleaned if name]
+    return shown if len(shown) > 1 else []
+
+
+def _as_typed(name: str) -> str:
+    return name[:1].upper() + name[1:]
+
+
+def _block(kind: str, text: str, ref: str) -> dict:
+    content = {"text": text, "checked": False} if kind == "TODO" else {"text": text}
+    return {"ref": ref, "type": kind, "content": content}
+
+
+def _keep_listed(blocks: list[dict], names: list[str], sections: bool) -> list[dict]:
+    by_key = {text_key(name): name for name in names}
+    kept: list[dict] = []
+    for block in blocks:
+        text = (block.get("content") or {}).get("text")
+        if block["type"] not in ("HEADER", "TODO", "TEXT") or not isinstance(text, str) or block.get("parentRef"):
+            kept.append(block)
+            continue
+        numbered = NUMBERED_HEAD.match(text)
+        if numbered and text_key(text[numbered.end():]) in by_key:
+            kept.append({**block, "content": {**block["content"], "text": _as_typed(by_key[text_key(text[numbered.end():])])}})
+            continue
+        head, colon, rest = text.partition(":")
+        if colon and sections and text_key(head) in by_key:
+            kept.append(_block("HEADER", _as_typed(by_key[text_key(head)]), block["ref"]))
+            if rest.strip():
+                kept.append(_block("TEXT", rest.strip(), f"{block['ref']}_text"))
+            continue
+        if block["type"] != "HEADER" and text.rstrip().endswith(":") and text_key(text) not in by_key:
+            continue
+        kept.append(block)
+    return _trim_to_names(kept, names)
+
+
+def _trim_to_names(blocks: list[dict], names: list[str]) -> list[dict]:
+    keys = sorted({text_key(name): name for name in names}.items(), key=lambda item: -len(item[0]))
+
+    def named(text: str) -> str | None:
+        key = text_key(text)
+        return next((name for name_key, name in keys if key == name_key or key.startswith(f"{name_key} ")), None)
+
+    texts = [(block.get("content") or {}).get("text") for block in blocks
+             if block["type"] in ("HEADER", "TODO") and not block.get("parentRef")]
+    found = {text_key(name) for text in texts if isinstance(text, str) for name in [named(text)] if name}
+    if found != {key for key, _ in keys}:
+        return blocks
+    trimmed = []
+    for block in blocks:
+        text = (block.get("content") or {}).get("text")
+        name = named(text) if block["type"] in ("HEADER", "TODO") and isinstance(text, str) else None
+        trimmed.append({**block, "content": {**block["content"], "text": _as_typed(name)}} if name else block)
+    return trimmed
+
+
+def _title_without_filler(title: str, instruction: str) -> str:
+    sentence = re.sub(r"[\s.!?,]+$", "", unicodedata.normalize("NFC", instruction)).split()
+    tail: list[str] = []
+    while sentence:
+        word = sentence[-1].casefold()
+        if word in FILLER_PERSONS and len(sentence) > 1 and sentence[-2].casefold() in PERSON_LEADS:
+            tail[:0] = [sentence[-2].casefold(), word]
+            del sentence[-2:]
+        elif word in FILLER_WORDS:
+            tail.insert(0, sentence.pop().casefold())
+        else:
+            break
+    words = title.split()
+    for size in range(len(tail), 0, -1):
+        ending = [word.casefold() for word in words[-size:]]
+        if len(words) > size and ending == tail[:size]:
+            if ending[0] == "đi" and words[-size - 1].casefold() in GO_KEPT:
+                return title
+            return " ".join(words[:-size])
+    return title
+
+
+def keep_user_words(draft: PageCompositionDraft, instruction: str) -> PageCompositionDraft:
+    data = draft.model_dump(mode="json", exclude_none=True)
+    names = _listed_names(instruction)
+    if names:
+        data["blocks"] = _keep_listed(data["blocks"], names, bool(SECTION_ASKED.search(instruction)))
+    data["page"]["title"] = _title_without_filler(data["page"]["title"], instruction)
+    return PageCompositionDraft.model_validate(data)
