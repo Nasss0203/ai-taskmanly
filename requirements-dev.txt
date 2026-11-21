@@ -2,3 +2,4 @@
 
 # Pytest runs both legacy characterization and new internal architecture tests.
 pytest==8.4.2
+ruff==0.17.6

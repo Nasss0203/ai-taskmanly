@@ -34,7 +34,7 @@ from scripts.evaluate_generation import _block, _context, _property, _todo
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "training" / "data" / "requests.jsonl"
 GENERATION_CASES = ROOT / "evaluation" / "generation_cases.jsonl"
-INTENT_CASES = ROOT.parent / "docs" / "quy trình AI" / "intent_cases.jsonl"
+INTENT_CASES = ROOT / "evaluation" / "intent_cases.jsonl"
 
 # Pages and sentences of the evaluation sets (gp/gc, I8 in check-based-on-drafts.ts).
 RESERVED_TITLES = {"hội họp tuần", "sub man", "release 2.0", "bug tracker", "ghi chú qa",

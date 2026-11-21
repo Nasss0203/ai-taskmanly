@@ -20,7 +20,7 @@ from app.modules.intent.services.intent_service import IntentService
 from app.modules.page_intent.services.page_reference_evidence import detect_page_reference
 
 
-DEFAULT_CASES = Path(__file__).resolve().parents[2] / 'docs' / 'quy trình AI' / 'intent_cases.jsonl'
+DEFAULT_CASES = Path(__file__).resolve().parents[1] / 'evaluation' / 'intent_cases.jsonl'
 SELECTION_FIXTURE = 'Taskmanly helps teams organize work and collaborate on project plans.'
 
 
