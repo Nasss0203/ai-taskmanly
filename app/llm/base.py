@@ -13,6 +13,8 @@ class LLMTokenUsage:
 class LLMGenerationResult:
     text: str
     usage: LLMTokenUsage | None = None
+    provider_name: str | None = None
+    model_name: str | None = None
 
 
 class LLMProvider(Protocol):
@@ -30,6 +32,10 @@ class LLMProvider(Protocol):
 
     async def close(self) -> None:
         ...
+
+
+def answered_by(generation: LLMGenerationResult, provider: "LLMProvider") -> tuple[str, str]:
+    return (generation.provider_name or provider.provider_name, generation.model_name or provider.model_name)
 
 
 @dataclass(frozen=True)

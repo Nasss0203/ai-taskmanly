@@ -8,6 +8,7 @@ from app.llm.base import (
     LLMGenerationResult,
     LLMProvider,
     LLMTokenUsage,
+    answered_by,
 )
 from app.modules.page_composition.prompts import (
     build_page_composition_prompt,
@@ -158,6 +159,7 @@ class PageCompositionService:
             (perf_counter() - started_at) * 1000,
         )
 
+        provider_name, model_name = answered_by(generation, self.llm_provider)
         return PageCompositionResponse(
             result=complete_databases(
                 drop_unrequested_databases(
@@ -169,8 +171,8 @@ class PageCompositionService:
                 ),
                 request.instruction,
             ),
-            provider=self.llm_provider.provider_name,
-            model=self.llm_provider.model_name,
+            provider=provider_name,
+            model=model_name,
             usage=(
                 PageCompositionUsage(
                     prompt_tokens=total_usage.prompt_tokens,

@@ -15,6 +15,7 @@ def create_gemini_provider(settings: Settings) -> GeminiProvider:
         thinking_level=settings.gemini_thinking_level,
         thinking_tokens=settings.gemini_thinking_tokens,
         max_retries=settings.gemini_max_retries,
+        retry_on_rate_limit=not settings.llm_fallback_to_ollama,
     )
 
 

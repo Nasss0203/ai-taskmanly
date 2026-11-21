@@ -4,7 +4,7 @@ from time import perf_counter
 from typing import Any
 
 from app.core.exceptions import InvalidLLMResponseError, WritingNotDoneError
-from app.llm.base import LLMProvider
+from app.llm.base import LLMProvider, answered_by
 from app.modules.modification_planner.services.context_window import window_context
 from app.modules.modification_planner.services.sentence_text import text_key
 from app.modules.page_question.facts import database_answer, known_numbers, todo_answer, todo_facts
@@ -128,10 +128,11 @@ class PageQuestionService:
                 logger.info("page_question_answered kind=%s provider=%s model=%s latency_ms=%.2f attempt=%d",
                             request.questionKind, self.llm_provider.provider_name,
                             self.llm_provider.model_name, (perf_counter() - started_at) * 1000, attempt + 1)
+                provider_name, model_name = answered_by(generation, self.llm_provider)
                 return PageQuestionResponse(
                     answer=answer, usedModel=True,
                     facts={"todoTotal": todos.total, "todoDone": len(todos.done), "todoOpen": len(todos.open)},
-                    provider=self.llm_provider.provider_name, model=self.llm_provider.model_name,
+                    provider=provider_name, model=model_name,
                 )
             logger.warning("page_question_check_failed kind=%s problem=%s attempt=%d",
                            request.questionKind, problem, attempt + 1)

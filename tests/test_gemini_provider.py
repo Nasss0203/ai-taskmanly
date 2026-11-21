@@ -250,3 +250,31 @@ def test_close_only_closes_its_own_client() -> None:
         assert owned._client.is_closed
 
     asyncio.run(call())
+
+
+@pytest.mark.parametrize("reply", [
+    lambda request: httpx.Response(429, headers={"Retry-After": "3"}),
+    lambda request: httpx.Response(503),
+])
+def test_without_rate_limit_retries_the_first_refusal_is_unavailable(reply) -> None:
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        return reply(request)
+
+    with pytest.raises(LLMUnavailableError):
+        run(handler, sleeps=sleeps, retry_on_rate_limit=False)
+    assert (len(calls), sleeps) == (1, [])
+
+
+def test_without_rate_limit_retries_a_lost_connection_is_unavailable_at_once() -> None:
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ConnectError("down")
+
+    with pytest.raises(LLMUnavailableError):
+        run(handler, sleeps=sleeps, retry_on_rate_limit=False)
+    assert (len(calls), sleeps) == (1, [])

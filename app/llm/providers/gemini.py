@@ -41,6 +41,7 @@ class GeminiProvider:
         thinking_level: str | None = "MINIMAL",
         thinking_tokens: int = 1024,
         max_retries: int = 2,
+        retry_on_rate_limit: bool = True,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self.model_name = model_name
@@ -49,6 +50,7 @@ class GeminiProvider:
         self._thinking_level = thinking_level
         self._thinking_tokens = thinking_tokens
         self._max_retries = max_retries
+        self.retry_on_rate_limit = retry_on_rate_limit
         self._sleep = sleep
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_seconds)
@@ -80,7 +82,7 @@ class GeminiProvider:
                     raise _RateLimited(TRANSIENT_WAIT_SECONDS, "connection") from None
                 break
             except _RateLimited as limited:
-                if attempt >= self._max_retries:
+                if not self.retry_on_rate_limit or attempt >= self._max_retries:
                     self._log_failure(started_at, limited.reason)
                     if limited.reason == "connection":
                         raise LLMUnavailableError("Cannot connect to Gemini.") from None

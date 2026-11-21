@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     page_composition_llm_provider: TaskProvider | None = None
     modification_planner_llm_provider: TaskProvider | None = None
     page_question_llm_provider: TaskProvider | None = None
+    llm_fallback_to_ollama: bool = True
 
     gemini_api_key: SecretStr = SecretStr("")
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"

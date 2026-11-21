@@ -10,6 +10,7 @@ from app.llm.base import (
     LLMGenerationResult,
     LLMProvider,
     LLMTokenUsage,
+    answered_by,
 )
 from app.modules.modification_planner.prompts.modification_planner_prompt import (
     build_create_database_rows_generation_prompt,
@@ -265,16 +266,17 @@ class ModificationPlannerService:
             self.llm_provider.model_name,
             (perf_counter() - started_at) * 1000,
         )
+        provider_name, model_name = answered_by(stage_two_generation, self.llm_provider)
         if total_usage is None:
             return ModificationPlannerResponse(
                 result=plan,
-                provider=self.llm_provider.provider_name,
-                model=self.llm_provider.model_name,
+                provider=provider_name,
+                model=model_name,
             )
         return ModificationPlannerResponse(
             result=plan,
-            provider=self.llm_provider.provider_name,
-            model=self.llm_provider.model_name,
+            provider=provider_name,
+            model=model_name,
             usage=ModificationPlannerUsage(
                 prompt_tokens=total_usage.prompt_tokens,
                 completion_tokens=(

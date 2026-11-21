@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from app.core.config import Settings
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
 from app.llm.factory import create_gemini_provider
+from app.llm.providers.fallback import FallbackLLMProvider
 from app.llm.providers.gemini import GeminiProvider
 from app.main import app
 
@@ -81,7 +82,7 @@ def start(monkeypatch, tmp_path, **environment):
         "OLLAMA_PAGE_COMPOSITION_MODEL": "qwen3:4b-instruct",
         "OLLAMA_MODIFICATION_PLANNER_MODEL": "qwen3:4b-instruct",
     }
-    for name in (*TASK_VARIABLES, "GEMINI_API_KEY", "OLLAMA_INTENT_MODEL", "OLLAMA_WRITING_MODEL",
+    for name in (*TASK_VARIABLES, "GEMINI_API_KEY", "LLM_FALLBACK_TO_OLLAMA", "OLLAMA_INTENT_MODEL", "OLLAMA_WRITING_MODEL",
                  "OLLAMA_MODEL_NUM_GPU", "OLLAMA_NUM_GPU", "OLLAMA_MODIFICATION_PLANNER_NUM_GPU"):
         monkeypatch.delenv(name, raising=False)
     for name, value in {**defaults, **environment}.items():
@@ -102,6 +103,10 @@ def providers(state) -> dict[str, object]:
     }
 
 
+def gemini_of(provider):
+    return provider.primary if isinstance(provider, FallbackLLMProvider) else provider
+
+
 def test_without_task_settings_nothing_uses_gemini(monkeypatch, tmp_path) -> None:
     with start(monkeypatch, tmp_path) as client:
         chosen = providers(client.app.state)
@@ -112,7 +117,7 @@ def test_without_task_settings_nothing_uses_gemini(monkeypatch, tmp_path) -> Non
 def test_only_the_named_task_moves_to_gemini(monkeypatch, tmp_path) -> None:
     with start(monkeypatch, tmp_path, WRITING_LLM_PROVIDER="gemini", GEMINI_API_KEY=KEY) as client:
         chosen = providers(client.app.state)
-        assert isinstance(chosen["writing"], GeminiProvider)
+        assert isinstance(gemini_of(chosen["writing"]), GeminiProvider)
         assert chosen["continue"].model_name == "qwen3:4b-instruct"
         assert chosen["continue"].provider_name == "ollama"
         for name in ("composition", "planner", "intent", "page_intent"):
@@ -124,7 +129,7 @@ def test_question_can_differ_from_writing(monkeypatch, tmp_path) -> None:
     with start(monkeypatch, tmp_path, WRITING_LLM_PROVIDER="gemini", PAGE_QUESTION_LLM_PROVIDER="ollama",
                GEMINI_API_KEY=KEY) as client:
         chosen = providers(client.app.state)
-        assert isinstance(chosen["writing"], GeminiProvider)
+        assert isinstance(gemini_of(chosen["writing"]), GeminiProvider)
         assert (chosen["question"].provider_name, chosen["question"].model_name) == ("ollama", "qwen3:1.7b")
 
 
@@ -132,10 +137,10 @@ def test_every_content_task_shares_one_gemini_provider(monkeypatch, tmp_path) ->
     environment = {name: "gemini" for name in TASK_VARIABLES}
     with start(monkeypatch, tmp_path, GEMINI_API_KEY=KEY, GEMINI_MODEL="gemini-3.6-flash", **environment) as client:
         chosen = providers(client.app.state)
-        gemini = chosen["writing"]
+        gemini = gemini_of(chosen["writing"])
         assert isinstance(gemini, GeminiProvider) and gemini.model_name == "gemini-3.6-flash"
         for name in ("continue", "composition", "planner", "question"):
-            assert chosen[name] is gemini
+            assert gemini_of(chosen[name]) is gemini
         assert chosen["intent"].provider_name == "ollama"
         assert chosen["page_intent"].provider_name == "ollama"
 
@@ -143,8 +148,46 @@ def test_every_content_task_shares_one_gemini_provider(monkeypatch, tmp_path) ->
 def test_planner_alone_on_gemini(monkeypatch, tmp_path) -> None:
     with start(monkeypatch, tmp_path, MODIFICATION_PLANNER_LLM_PROVIDER="gemini", GEMINI_API_KEY=KEY) as client:
         chosen = providers(client.app.state)
-        assert isinstance(chosen["planner"], GeminiProvider)
+        assert isinstance(gemini_of(chosen["planner"]), GeminiProvider)
         assert chosen["composition"].provider_name == "ollama"
+
+
+def test_a_gemini_task_falls_back_to_the_ollama_provider_it_would_use(monkeypatch, tmp_path) -> None:
+    with start(monkeypatch, tmp_path, WRITING_LLM_PROVIDER="gemini", PAGE_COMPOSITION_LLM_PROVIDER="gemini",
+               GEMINI_API_KEY=KEY) as client:
+        chosen = providers(client.app.state)
+        writing, composition = chosen["writing"], chosen["composition"]
+        assert isinstance(writing, FallbackLLMProvider) and isinstance(composition, FallbackLLMProvider)
+        assert writing.primary is composition.primary
+        assert writing.primary.retry_on_rate_limit is False
+        assert (writing.fallback.provider_name, writing.fallback.model_name) == ("ollama", "qwen3:1.7b")
+        assert (composition.fallback.provider_name, composition.fallback.model_name) == ("ollama", "qwen3:4b-instruct")
+        assert chosen["question"] is writing
+
+
+def test_every_gemini_task_has_a_single_ollama_backup(monkeypatch, tmp_path) -> None:
+    environment = {name: "gemini" for name in TASK_VARIABLES}
+    with start(monkeypatch, tmp_path, GEMINI_API_KEY=KEY, OLLAMA_CONTINUE_MODEL="", **environment) as client:
+        chosen = providers(client.app.state)
+        for name in ("writing", "continue", "composition", "planner", "question"):
+            assert isinstance(chosen[name], FallbackLLMProvider), name
+            assert isinstance(chosen[name].primary, GeminiProvider), name
+            assert chosen[name].fallback.provider_name == "ollama", name
+        assert chosen["question"].fallback.model_name == "qwen3:1.7b"
+        assert chosen["continue"].fallback.model_name == "qwen3:1.7b"
+
+
+def test_fallback_can_be_turned_off(monkeypatch, tmp_path) -> None:
+    with start(monkeypatch, tmp_path, WRITING_LLM_PROVIDER="gemini", GEMINI_API_KEY=KEY,
+               LLM_FALLBACK_TO_OLLAMA="false") as client:
+        chosen = providers(client.app.state)
+        assert isinstance(chosen["writing"], GeminiProvider)
+        assert chosen["writing"].retry_on_rate_limit is True
+
+
+def test_fallback_is_on_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("LLM_FALLBACK_TO_OLLAMA", raising=False)
+    assert settings().llm_fallback_to_ollama is True
 
 
 class Recording:

@@ -3,7 +3,7 @@ import re
 from time import perf_counter
 
 from app.core.exceptions import InvalidLLMResponseError, WritingNotDoneError
-from app.llm.base import LLMProvider
+from app.llm.base import LLMProvider, answered_by
 from app.modules.writing.prompts import build_writing_prompt
 from app.modules.writing.schemas import WritingAction, WritingRequest, WritingResponse
 from app.modules.writing.schemas.writing_schema import WritingUsage
@@ -103,10 +103,11 @@ class WritingService:
             provider.model_name,
             (perf_counter() - started_at) * 1000,
         )
+        provider_name, model_name = answered_by(generation, provider)
         return WritingResponse(
             result=result if request.action is WritingAction.CONTINUE else result.strip(),
-            provider=provider.provider_name,
-            model=provider.model_name,
+            provider=provider_name,
+            model=model_name,
             usage=(
                 WritingUsage(
                     prompt_tokens=generation.usage.prompt_tokens,
