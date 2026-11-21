@@ -33,7 +33,7 @@ def test_examples_show_everyday_vietnamese_ways_of_asking():
     by_intent = {}
     for item in examples():
         by_intent.setdefault(item['output']['intent'], []).append(item['instruction'])
-    assert any(text.startswith('trang mới') or text.startswith('mình cần trang') for text in by_intent['CREATE_PAGE'])
+    assert any(text.startswith(('trang mới', 'mình cần trang')) for text in by_intent['CREATE_PAGE'])
     assert any(',' in text and not text.lower().startswith(('thêm', 'ở trang')) for text in by_intent['MODIFY_PAGE'])
     assert any(text.lower().startswith('ở trang') for text in by_intent['MODIFY_PAGE'])
     assert ('WRITING', True) in found

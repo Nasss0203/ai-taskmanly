@@ -181,18 +181,18 @@ def test_trong_do_inside_a_title_stays() -> None:
     ("nhờ bạn tạo trang Kế hoạch du lịch Đà Nẵng và trong đó có bảng Công việc các cột Tên việc, Người phụ trách, Hạn chót",
      "Kế hoạch du lịch Đà Nẵng", "Công việc",
      [("Tên việc", "TITLE", []), ("Người phụ trách", "TEXT", []), ("Hạn chót", "DATE", [])]),
-    ("cho mình làm trang Quản lý khách hàng có bảng Công việc, các cột Tên việc, Người phụ trách, Trạng thái gồm "
-     "Chưa đọc, Đang đọc và Đã đọc với", "Quản lý khách hàng", "Công việc",
+    (("cho mình làm trang Quản lý khách hàng có bảng Công việc, các cột Tên việc, Người phụ trách, Trạng thái gồm "
+      "Chưa đọc, Đang đọc và Đã đọc với"), "Quản lý khách hàng", "Công việc",
      [("Tên việc", "TITLE", []), ("Người phụ trách", "TEXT", []),
       ("Trạng thái", "SELECT", ["Chưa đọc", "Đang đọc", "Đã đọc"])]),
-    ("mình cần trang Dự án website mới có bảng Sách gồm cột Tên sách, Tác giả và cột Trạng thái có các lựa chọn "
-     "Chưa làm, Đang làm và Xong nha", "Dự án website mới", "Sách",
+    (("mình cần trang Dự án website mới có bảng Sách gồm cột Tên sách, Tác giả và cột Trạng thái có các lựa chọn "
+      "Chưa làm, Đang làm và Xong nha"), "Dự án website mới", "Sách",
      [("Tên sách", "TITLE", []), ("Tác giả", "TEXT", []), ("Trạng thái", "SELECT", ["Chưa làm", "Đang làm", "Xong"])]),
-    ("nhờ bạn tạo trang Ăn sạch có bảng Thực đơn, các cột Món ăn, Nguyên liệu và Tình trạng có Chưa mua, Đang giao "
-     "và Đủ hàng nhé", "Ăn sạch", "Thực đơn",
+    (("nhờ bạn tạo trang Ăn sạch có bảng Thực đơn, các cột Món ăn, Nguyên liệu và Tình trạng có Chưa mua, Đang giao "
+      "và Đủ hàng nhé"), "Ăn sạch", "Thực đơn",
      [("Món ăn", "TITLE", []), ("Nguyên liệu", "TEXT", []), ("Tình trạng", "SELECT", ["Chưa mua", "Đang giao", "Đủ hàng"])]),
-    ("phiền bạn lập trang Tập đàn có bảng Bài tập, cột Tên bài, Nhạc sĩ và cột Mức độ lựa chọn Mới tập, Tập quen "
-     "và Thuần thục nha", "Tập đàn", "Bài tập",
+    (("phiền bạn lập trang Tập đàn có bảng Bài tập, cột Tên bài, Nhạc sĩ và cột Mức độ lựa chọn Mới tập, Tập quen "
+      "và Thuần thục nha"), "Tập đàn", "Bài tập",
      [("Tên bài", "TITLE", []), ("Nhạc sĩ", "TEXT", []), ("Mức độ", "SELECT", ["Mới tập", "Tập quen", "Thuần thục"])]),
     ("nhờ bạn tạo trang Nấu ăn có bảng Món, các cột Tên món, Giá và Kết quả có Ngon và Phải làm lại",
      "Nấu ăn", "Món",

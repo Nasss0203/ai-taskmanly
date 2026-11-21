@@ -192,8 +192,8 @@ def english_page_reference(source: str) -> PageReferenceEvidence | None:
         if title and not ENGLISH_CURRENT.match(title):
             edit = f"{end_of_page.group('edit').strip()} {end_of_page.group('place')} the page"
             return PageReferenceEvidence("TITLE", title, edit)
-    for guessed, pattern in enumerate(ENGLISH_TRAILING_PAGE):
-        trailing = pattern.match(source)
+    for guessed, compiled in enumerate(ENGLISH_TRAILING_PAGE):
+        trailing = compiled.match(source)
         if trailing is None:
             continue
         edit = trailing.group("edit").strip()
@@ -649,8 +649,8 @@ def _activity_time(time: str | None, just: str) -> ActivityReference | None:
     if days:
         count = int(days.group("days"))
         return ActivityReference("N_DAYS_AGO", count) if 1 <= count <= MAX_ACTIVITY_DAYS else None
-    for pattern, relative in ACTIVITY_TIMES:
-        if pattern.match(words):
+    for compiled, relative in ACTIVITY_TIMES:
+        if compiled.match(words):
             return ActivityReference(relative)
     return None
 
@@ -660,8 +660,8 @@ def activity_page_reference(source: str) -> tuple[str, ActivityReference] | None
     text = ACTIVITY_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
     if len(_target_markers(text)) != 1:
         return None
-    for pattern in (ACTIVITY_VI_FIRST, ACTIVITY_EN_FIRST, ACTIVITY_VI, ACTIVITY_EN):
-        match = pattern.match(text)
+    for compiled in (ACTIVITY_VI_FIRST, ACTIVITY_EN_FIRST, ACTIVITY_VI, ACTIVITY_EN):
+        match = compiled.match(text)
         if not match:
             continue
         edit = match.group("edit").strip()
@@ -724,8 +724,8 @@ def _scoped_name(text: str | None) -> str | None:
 def scoped_page_reference(source: str) -> tuple[str, str, PageScope] | None:
     """The edit clause, the Page name and where that Page is, if a sentence says so."""
     text = SCOPE_TAIL.sub("", unicodedata.normalize("NFC", source).strip())
-    for pattern in (SCOPE_VI, SCOPE_EN):
-        match = pattern.match(text)
+    for compiled in (SCOPE_VI, SCOPE_EN):
+        match = compiled.match(text)
         if not match:
             continue
         edit = match.group("edit").strip()
@@ -788,8 +788,8 @@ def description_page_reference(source: str) -> tuple[str, str] | None:
     # One Page only, and a quoted name is a title, never a description.
     if len(_target_markers(text)) != 1 or QUOTED_TEXT.search(text):
         return None
-    for pattern in (DESCRIPTION_VI, DESCRIPTION_VI_FIRST, DESCRIPTION_EN, DESCRIPTION_EN_FIRST):
-        match = pattern.match(text)
+    for compiled in (DESCRIPTION_VI, DESCRIPTION_VI_FIRST, DESCRIPTION_EN, DESCRIPTION_EN_FIRST):
+        match = compiled.match(text)
         if not match:
             continue
         edit = DESCRIPTION_TAIL.sub("", match.group("edit").strip())
@@ -842,8 +842,8 @@ def content_page_reference(source: str) -> tuple[str, str] | None:
     # One Page only, and a quoted name is a title, never words inside a Page.
     if len(_target_markers(text)) != 1 or QUOTED_TEXT.search(text):
         return None
-    for pattern in (CONTENT_VI, CONTENT_VI_FIND, CONTENT_EN, CONTENT_EN_FIND):
-        match = pattern.match(text)
+    for compiled in (CONTENT_VI, CONTENT_VI_FIND, CONTENT_EN, CONTENT_EN_FIND):
+        match = compiled.match(text)
         if not match:
             continue
         edit = DESCRIPTION_TAIL.sub("", match.group("edit").strip())

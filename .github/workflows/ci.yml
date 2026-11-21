@@ -16,8 +16,12 @@ permissions:
 
 jobs:
   test:
-    name: Lint & Test
+    name: Lint & Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
     env:
       APP_ENV: test
       PYTHONIOENCODING: utf-8
@@ -29,7 +33,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
           cache-dependency-path: |
             requirements.txt
@@ -42,12 +46,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r "$RUNNER_TEMP/requirements-ci.txt"
 
-      - name: Lint (blocking)
-        run: ruff check --select E9,F821 .
-
-      - name: Lint (report)
-        continue-on-error: true
-        run: ruff check --statistics .
+      - name: Lint
+        run: ruff check .
 
       - name: Prepare training data
         run: python -m training.prepare_dataset

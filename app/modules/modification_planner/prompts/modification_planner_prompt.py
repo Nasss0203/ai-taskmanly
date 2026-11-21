@@ -686,8 +686,8 @@ def _reference_summary(references: list[dict[str, Any]] | None) -> list[str]:
         return []
     titles = sorted({str(reference["pageTitle"]) for reference in references})
     return [
-        f"Có {len(references)} đoạn references (chỉ để đọc) từ trang: {', '.join(titles)}."
-        " Yêu cầu dựa trên các đoạn đó là đủ context nếu chúng liên quan.",
+        (f"Có {len(references)} đoạn references (chỉ để đọc) từ trang: {', '.join(titles)}."
+         " Yêu cầu dựa trên các đoạn đó là đủ context nếu chúng liên quan."),
         "",
     ]
 

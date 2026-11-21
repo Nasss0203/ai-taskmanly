@@ -76,7 +76,7 @@ WEDDING = "Mình đang lên kế hoạch cho đám cưới, làm giúp trang Đ�
 
 
 def test_a_numbered_section_heading_becomes_the_listed_name() -> None:
-    title, blocks = kept(WEDDING, "Đám cưới tháng Chạp", [
+    _title, blocks = kept(WEDDING, "Đám cưới tháng Chạp", [
         ("HEADER", "Phần 1: Khách mời"), ("TODO", "Lập danh sách"), ("HEADER", "Phần 2: Ngân sách"),
         ("HEADER", "3. Lịch trình")])
     assert blocks == [("HEADER", "Khách mời"), ("TODO", "Lập danh sách"), ("HEADER", "Ngân sách"), ("HEADER", "Lịch trình")]

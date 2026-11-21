@@ -447,33 +447,31 @@ def _validate_context_request(
     request: ModificationContextRequest,
     context: AiPageContext,
 ) -> None:
-    if request.databaseId is not None:
-        if (
-            _find_database(
-                context,
-                request.databaseId,
-            )
-            is None
-        ):
-            _fail(
-                f"Context request database "
-                f"{request.databaseId} is not available "
-                "in the current page context",
-            )
+    if request.databaseId is not None and (
+        _find_database(
+            context,
+            request.databaseId,
+        )
+        is None
+    ):
+        _fail(
+            f"Context request database "
+            f"{request.databaseId} is not available "
+            "in the current page context",
+        )
 
-    if request.blockId is not None:
-        if (
-            _find_block(
-                context,
-                request.blockId,
-            )
-            is None
-        ):
-            _fail(
-                f"Context request block "
-                f"{request.blockId} is not available "
-                "in the current page context",
-            )
+    if request.blockId is not None and (
+        _find_block(
+            context,
+            request.blockId,
+        )
+        is None
+    ):
+        _fail(
+            f"Context request block "
+            f"{request.blockId} is not available "
+            "in the current page context",
+        )
 
     if request.reason == "AMBIGUOUS_TARGET":
         if request.question is None:
@@ -490,12 +488,11 @@ def _validate_context_request(
         )
         return
 
-    if request.reason == "TEXT_TRUNCATED":
-        if not context.completeness.textTruncated:
-            _fail(
-                "TEXT_TRUNCATED was requested but the "
-                "current context reports textTruncated=false",
-            )
+    if request.reason == "TEXT_TRUNCATED" and not context.completeness.textTruncated:
+        _fail(
+            "TEXT_TRUNCATED was requested but the "
+            "current context reports textTruncated=false",
+        )
 
 
 def _validate_rows_truncated_reason(

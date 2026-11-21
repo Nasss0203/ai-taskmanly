@@ -25,9 +25,8 @@ class WritingRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_translation_language(self) -> "WritingRequest":
-        if self.action is WritingAction.TRANSLATE:
-            if not self.language or not self.language.strip():
-                raise ValueError("language is required for TRANSLATE.")
+        if self.action is WritingAction.TRANSLATE and (not self.language or not self.language.strip()):
+            raise ValueError("language is required for TRANSLATE.")
         return self
 
 

@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from itertools import pairwise
 
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
 from app.modules.intent.services.page_question_rules import page_question
@@ -369,7 +370,7 @@ def multiple_commands(source: str) -> bool:
     # source text. Rename's "thành/to" remains a single target.
     if markers and not inline_source(source):
         quotes = list(QUOTED_TEXT.finditer(source))
-        for first, second in zip(quotes, quotes[1:]):
+        for first, second in pairwise(quotes):
             between = fold(source[first.end():second.start()]).strip()
             if (first.start() > markers[0].start()
                     and between in {',', 'va', 'and', ', va', ', and'}
@@ -399,11 +400,9 @@ def multiple_commands(source: str) -> bool:
     if categories and any(OTHER_ACTION.match(clause)
                           for clause in re.split(r'\s+(?:roi|sau do|then|and then)\s+', text)[1:]):
         return True
-    if (has_multiple_page_targets(source) and len(categories) > 1
-            and not creation_evidence(source)):
-        return True
     # Two different Writing operations stay unclear even with one source.
-    return False
+    return (has_multiple_page_targets(source) and len(categories) > 1
+            and not creation_evidence(source))
 
 
 def deterministic_result(request: IntentRequest) -> IntentResult | None:

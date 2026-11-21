@@ -74,8 +74,8 @@ def test_a_failed_gemini_call_is_answered_by_the_backup(error, caplog) -> None:
     assert backup.calls == [{"system_prompt": "system", "user_prompt": PRIVATE, "max_new_tokens": 77,
                              "response_schema": {"type": "object"}}]
     lines = [record.getMessage() for record in caplog.records if "llm_fallback" in record.getMessage()]
-    assert lines == [f"llm_fallback task_provider=gemini fallback=ollama model=qwen3:4b-instruct "
-                     f"reason={type(error).__name__}"]
+    assert lines == [(f"llm_fallback task_provider=gemini fallback=ollama model=qwen3:4b-instruct "
+                      f"reason={type(error).__name__}")]
     assert PRIVATE not in caplog.text
 
 

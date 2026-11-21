@@ -27,8 +27,8 @@ def blocks(plan) -> list[tuple[str, str]]:
 
 
 @pytest.mark.parametrize(("instruction", "page", "expected", "after"), [
-    ("add these tasks for recovery: Prepare post-run snacks and Join the Saturday group run "
-     "after the Packing section", "trip",
+    (("add these tasks for recovery: Prepare post-run snacks and Join the Saturday group run "
+      "after the Packing section"), "trip",
      [("TODO", "Prepare post-run snacks"), ("TODO", "Join the Saturday group run")], "e2"),
     ("add these tasks: Book a physio session and Join the Saturday group run", "trip",
      [("TODO", "Book a physio session"), ("TODO", "Join the Saturday group run")], "e4"),

@@ -367,8 +367,7 @@ def test_nestjs_learns_who_made_the_draft() -> None:
 
     def probe(items):
         sent.append(items)
-        stage = "admitted" if items and "plan" not in items[0] else "admitted"
-        return {item["id"]: {"stage": stage, "status": "PLAN_GENERATED", "pageTitle": "Hội họp tuần"} for item in items}
+        return {item["id"]: {"stage": "admitted", "status": "PLAN_GENERATED", "pageTitle": "Hội họp tuần"} for item in items}
 
     intent = SimpleNamespace(result=SimpleNamespace(intent="MODIFY_PAGE"), provider="deterministic")
     page = SimpleNamespace(result=SimpleNamespace(model_dump=lambda mode: {"referenceType": "TITLE", "instruction": "thêm việc A"}),

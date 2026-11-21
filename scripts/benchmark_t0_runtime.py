@@ -46,7 +46,7 @@ class Sampler(threading.Thread):
             try:
                 out = subprocess.run(
                     ['nvidia-smi', '--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits'],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True, text=True, timeout=5, check=False,
                 ).stdout.split(',')
                 sample['vramUsed'], sample['vramTotal'] = int(out[0]), int(out[1])
             except Exception:
@@ -66,7 +66,7 @@ def percentile(values: list[float], fraction: float) -> float | None:
     if not values:
         return None
     ordered = sorted(values)
-    return round(ordered[min(len(ordered) - 1, int(round(fraction * (len(ordered) - 1))))], 3)
+    return round(ordered[min(len(ordered) - 1, round(fraction * (len(ordered) - 1)))], 3)
 
 
 def timing(values: list[float]) -> dict[str, Any]:

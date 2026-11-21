@@ -4,3 +4,14 @@ extend-exclude = ["training/outputs", "training/data", "training/baseline", "*.i
 
 [lint.isort]
 known-first-party = ["app", "scripts", "training", "tests", "evaluation"]
+
+[lint]
+ignore = ["TRY004"]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
+[lint.per-file-ignores]
+"scripts/**" = ["BLE001"]
+"training/**" = ["BLE001"]
+"tests/**" = ["BLE001"]

@@ -37,15 +37,15 @@ _QTY = rf"(?:(?:một|mot|vài|vai|các|cac|những|nhung|a|an|the|new|mới|moi
 _KINDS = (
     # K4 (kế hoạch nội dung không ngoặc kép): "danh sách mua sắm gồm a, b", "ghi chú X".
     # S1: "with todos a, b" / "với các to-do a, b": a plural kind lists its items.
-    ("LIST", r"to-do list|todo list|task list|check list|checklist|danh sách việc cần làm|danh sach viec can lam|"
-             r"danh sách việc|danh sach viec|việc cần làm|"
-             r"viec can lam|danh sách|danh sach|to-dos|todos"),
+    ("LIST", (r"to-do list|todo list|task list|check list|checklist|danh sách việc cần làm|danh sach viec can lam|"
+              r"danh sách việc|danh sach viec|việc cần làm|"
+              r"viec can lam|danh sách|danh sach|to-dos|todos")),
     ("HEADER", rf"heading|tiêu đề|tieu de|{pattern('object_label_extra', marked=True)}|{pattern('object_label_extra')}"),
     ("TODO", r"to-do|todo|việc|viec"),
     ("QUOTE", r"trích dẫn|trich dan|quote"),
-    ("TEXT", r"đoạn văn bản|doan van ban|đoạn văn|doan van|đoạn ghi chú|doan ghi chu|dòng ghi chú|dong ghi chu|"
-             r"đoạn chữ|doan chu|đoạn|doan|paragraph|text|dòng chữ|dong chu|dòng|dong|"
-             rf"line|ghi chú|ghi chu|{pattern('object_content_extra', marked=True)}|{pattern('object_content_extra')}"),
+    ("TEXT", (r"đoạn văn bản|doan van ban|đoạn văn|doan van|đoạn ghi chú|doan ghi chu|dòng ghi chú|dong ghi chu|"
+              r"đoạn chữ|doan chu|đoạn|doan|paragraph|text|dòng chữ|dong chu|dòng|dong|"
+              rf"line|ghi chú|ghi chu|{pattern('object_content_extra', marked=True)}|{pattern('object_content_extra')}")),
 )
 _KIND = "|".join(pattern for _, pattern in _KINDS)
 OBJECT = re.compile(

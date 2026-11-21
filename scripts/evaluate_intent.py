@@ -80,8 +80,8 @@ def request_for_case(case: dict[str, Any]) -> IntentRequest:
 
 
 def _group() -> dict[str, Any]:
-    return dict(eligible=0, correct=0, accuracy=None, llmRequired=0, errors=0,
-                referenceEligible=0, referenceCorrect=0)
+    return {'eligible': 0, 'correct': 0, 'accuracy': None, 'llmRequired': 0, 'errors': 0,
+            'referenceEligible': 0, 'referenceCorrect': 0}
 
 
 async def evaluate_cases(
@@ -96,18 +96,18 @@ async def evaluate_cases(
     if provider is not None:
         capture.provider_name, capture.model_name = provider.provider_name, provider.model_name
     service = IntentService(capture)
-    report: dict[str, Any] = dict(
-        mode=mode, total=len(cases), eligible=0, correct=0, invalid=0, invalidRejected=0,
-        tbd=0, llmRequired=0, llmCalls=0, errors=0, mutationFalsePositives=0,
-        realModelRun=False, m0ThresholdSatisfied=False,
-        referenceSource='deterministic-page-reference-evidence', groups={}, cases=[],
-    )
+    report: dict[str, Any] = {
+        'mode': mode, 'total': len(cases), 'eligible': 0, 'correct': 0, 'invalid': 0, 'invalidRejected': 0,
+        'tbd': 0, 'llmRequired': 0, 'llmCalls': 0, 'errors': 0, 'mutationFalsePositives': 0,
+        'realModelRun': False, 'm0ThresholdSatisfied': False,
+        'referenceSource': 'deterministic-page-reference-evidence', 'groups': {}, 'cases': [],
+    }
     by_intent: dict[str, dict[str, Any]] = {}
     for case in cases:
         expected = case['intent']
         # Reports contain IDs and finite contract labels, never source/selection
         # text, provider responses or exception messages.
-        row = dict(id=case['id'], expectedIntent=expected, expectedAction=case.get('action'))
+        row = {'id': case['id'], 'expectedIntent': expected, 'expectedAction': case.get('action')}
         report['cases'].append(row)
         if any(case.get(field) == 'TBD' for field in ('intent', 'action', 'language', 'reference')):
             report['tbd'] += 1
