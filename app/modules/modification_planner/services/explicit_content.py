@@ -12,7 +12,7 @@ import re
 import unicodedata
 
 from app.modules.modification_planner.services.sentence_text import COMMAND_PREFIX, TARGET, Folded
-from app.shared.vi_vocabulary import pattern
+from app.shared.vi_vocabulary import pattern, words
 
 # Polite words only as written: "chủ nhà" and "mang đi" keep their last word.
 POLITE_TAIL = re.compile(
@@ -93,6 +93,17 @@ TASK_LIST = re.compile(
 _TASKS_AFTER = r"^(?:các|cac|những|nhung)\s+(?:công việc|cong viec|việc|viec)\s+sau(?:\s+(?:đây|day))?"
 TASK_LIST_LISTED = re.compile(rf"{_TASKS_AFTER}\s+(?=[^,:]+,)", re.IGNORECASE)
 TASK_LIST_UNSURE = re.compile(rf"{_TASKS_AFTER}\s+(?=[^:]*$)", re.IGNORECASE)
+TODO_COUNT = re.compile(
+    rf"^(?P<qty>\d+|{_COUNT}|các|cac|những|nhung)\s+(?:to-do|todo|việc|viec)(?![\w-])", re.IGNORECASE,
+)
+JOINED = re.compile(r"\s+(?:và|va|and|với|voi)\s+", re.IGNORECASE)
+
+
+def _unmarked(word: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", word.casefold()) if not unicodedata.combining(c)).replace("đ", "d")
+
+
+NUMBERS = {word: index for index, word in enumerate(dict.fromkeys(map(_unmarked, words("count_words", marked=True))), 1)}
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`")
 STRIP = " .,!;:"
 
@@ -134,6 +145,23 @@ def _list_items(listed: str) -> list[str] | None:
             return None
         items.extend(piece for piece in pieces if piece.strip(STRIP))
     return items
+
+
+def _counted_todos(clause: str, content: str) -> list[str] | None:
+    found = TODO_COUNT.match(clause)
+    if found is None:
+        return None
+    qty = _unmarked(found.group("qty"))
+    count = int(qty) if qty.isdigit() else NUMBERS.get(qty)
+    if count is None:
+        if "," in content or not JOINED.search(content):
+            return None
+        return []
+    if count < 2:
+        return None
+    items = [piece.strip(STRIP) for part in ITEM_SEPARATOR.split(content) for piece in JOINED.split(part)]
+    items = [item for item in items if item]
+    return items if len(items) == count else []
 
 
 def _topic_merged(listed: str) -> bool:
@@ -228,6 +256,12 @@ def parse_explicit_blocks(instruction: str) -> list[tuple[str, str]] | None:
             blocks.extend(("TODO", _show(item, quoted)) for item in items)
         else:
             content_text = _before_position(rest)
+            counted = _counted_todos(clause.strip(), content_text) if kind == "TODO" else None
+            if counted is not None:
+                if not counted:
+                    return None
+                blocks.extend(("TODO", _show(item, quoted)) for item in counted)
+                continue
             # Bước 1 (bỏ dấu hai chấm): "thêm việc chuẩn bị slide, gửi lịch" is two to-dos.
             if kind == "TODO" and "," in content_text and ":" not in content_text:
                 items = _list_items(content_text)

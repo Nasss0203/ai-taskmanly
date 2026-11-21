@@ -138,3 +138,32 @@ def test_lock_is_skipped_with_a_source_page() -> None:
     ], references=[{"label": "S1", "pageTitle": "Bug tracker",
                     "text": "Ứng dụng bị crash khi tải ảnh lớn. Trang thanh toán hiển thị sai giá."}])
     assert len(texts(plan)) == 2
+
+
+@pytest.mark.parametrize(("instruction", "blocks"), [
+    ("thêm hai việc thuê người khuân đồ và mua băng keo vào trang Chuyển nhà",
+     [("TODO", "Thuê người khuân đồ"), ("TODO", "Mua băng keo")]),
+    ("thêm hai việc thuê người khuân đồ với mua băng keo vào trang Chuyển nhà",
+     [("TODO", "Thuê người khuân đồ"), ("TODO", "Mua băng keo")]),
+    ("thêm 2 việc thuê người khuân đồ và mua băng keo vào trang Chuyển nhà",
+     [("TODO", "Thuê người khuân đồ"), ("TODO", "Mua băng keo")]),
+    ("thêm ba việc gói đồ bếp, bọc tivi và tháo rèm cửa vào trang Chuyển nhà",
+     [("TODO", "Gói đồ bếp"), ("TODO", "Bọc tivi"), ("TODO", "Tháo rèm cửa")]),
+    ("thêm hai việc mua bánh và kẹo vào trang Chuyển nhà",
+     [("TODO", "Mua bánh"), ("TODO", "Kẹo")]),
+    ("thêm các việc thuê người khuân đồ, mua băng keo vào trang Chuyển nhà",
+     [("TODO", "Thuê người khuân đồ"), ("TODO", "Mua băng keo")]),
+    ("thêm việc thuê người khuân đồ và mua băng keo vào trang Chuyển nhà",
+     [("TODO", "Thuê người khuân đồ và mua băng keo")]),
+])
+def test_a_counted_list_of_tasks_is_split_into_that_many_todos(instruction, blocks) -> None:
+    assert parse_explicit_blocks(instruction) == blocks
+
+
+@pytest.mark.parametrize("instruction", [
+    "thêm hai việc gói đồ bếp, bọc tivi và tháo rèm cửa vào trang Chuyển nhà",
+    "thêm các việc thuê người khuân đồ và mua băng keo vào trang Chuyển nhà",
+    "thêm những việc thuê người khuân đồ với mua băng keo vào trang Chuyển nhà",
+])
+def test_an_unsure_list_of_tasks_gets_no_rule_draft(instruction) -> None:
+    assert parse_explicit_blocks(instruction) is None
