@@ -80,6 +80,8 @@ QUESTION_WORDS = re.compile(
 TITLED_QUESTION_WORDS = re.compile(r"\b(?:may gio|thu may|ngay may|luc may|bao lau)\b")
 FIND_ONLY = re.compile(r"\b(?:tim (?:mot |1 |cai )?(?:trang|page)|(?:trang|page) nao|which page|find (?:the )?page)\b")
 DATABASE_KINDS = {"bang", "table", "database", "co so du lieu"}
+PLACE_LEAD = re.compile(r"^(?:o\s+)?(?:cuoi|dau)\s+(?:trang|page)\s")
+MARKED_MAY = re.compile(r"(?<!\w)(?!mấy(?!\w))(?:m[aáàảãạâấầẩẫậăắằẳẵặ]y)(?!\w)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,8 @@ def _without_task_names(source: str) -> str:
         if text[start:start + 1].isupper():
             end = TASK_END.search(text, start)
             text = text[:start] + "X" + text[end.start():]
+    if fold(text) != text.casefold():
+        text = MARKED_MAY.sub("X", text)
     return " ".join(fold(text).split())
 
 
@@ -193,6 +197,9 @@ def page_question(source: str, *, has_current_page: bool, titles: tuple[str, ...
     page, database, current, titled = _references(text, titles)
     named = bool(page or database or current)
     if not named and not has_current_page:
+        return None
+    placed = _after_page(folded, page, current) if PLACE_LEAD.match(folded) else None
+    if placed and EDIT_START.match(placed.strip()):
         return None
     masked = _without_task_names(source)
     asking = _asks(masked)

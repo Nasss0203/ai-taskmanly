@@ -131,3 +131,29 @@ def test_more_natural_page_questions(sentence, kind) -> None:
 def test_a_statement_about_one_task_is_no_question(sentence) -> None:
     result = titled(sentence)
     assert result is None or result.intent != "PAGE_QUESTION"
+
+
+CLUB = ("CLB nhiếp ảnh",)
+
+
+@pytest.mark.parametrize("sentence", [
+    "trang CLB nhiếp ảnh: Sạc đầy hai pin máy ảnh đã xong",
+    "trang CLB nhiếp ảnh: Sạc đầy hai pin máy ảnh xong rồi",
+    "trang CLB nhiếp ảnh: Sửa máy chiếu xong rồi",
+    "cuối trang CLB nhiếp ảnh ghi thêm một đoạn ai đi muộn thì tự bắt xe",
+    "đầu trang CLB nhiếp ảnh thêm đoạn ai quên thẻ thì báo",
+])
+def test_an_edit_with_a_question_like_word_is_no_page_question(sentence) -> None:
+    assert page_question(sentence, has_current_page=False, titles=CLUB) is None
+
+
+@pytest.mark.parametrize(("sentence", "kind"), [
+    ("trang CLB nhiếp ảnh có mấy việc đã xong", "TODO_STATUS"),
+    ("trang CLB nhiếp ảnh còn mấy việc", "TODO_STATUS"),
+    ("trang CLB nhiep anh con may viec chua xong", "TODO_STATUS"),
+    ("cuối trang CLB nhiếp ảnh ai đi muộn?", "FREE"),
+    ("trang CLB nhiếp ảnh ai phụ trách mượn đèn", "FREE"),
+])
+def test_a_question_with_may_or_ai_is_still_a_page_question(sentence, kind) -> None:
+    found = page_question(sentence, has_current_page=False, titles=CLUB)
+    assert found is not None and found.kind == kind
