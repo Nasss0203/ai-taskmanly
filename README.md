@@ -39,9 +39,15 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` contains direct production dependencies. The legacy
-Transformers dependencies remain while the compatibility endpoint exists.
-`requirements-dev.txt` adds the test runner.
+`requirements.txt` contains direct production dependencies for every
+`/internal/v1/*` endpoint. `requirements-dev.txt` adds the test runner and
+linter. `requirements-qwen.txt` adds PyTorch, Transformers and Accelerate; install
+it only for the legacy in-process Qwen endpoint `POST /api/v1/assistant` and for
+`scripts/test_gpu.py` and `scripts/test_model.py`:
+
+```bash
+python -m pip install -r requirements-qwen.txt
+```
 
 ## Configuration
 
