@@ -2,14 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.api.dependencies import get_page_composition_service
+from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionRequest,
     PageCompositionResponse,
 )
 from app.modules.page_composition.services import PageCompositionService
-
 
 router = APIRouter()
 

@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_valid
 
 from app.shared.request_limits import CurrentPageId, Instruction, PageTitles, WritingText, validate_input_budget
 
-
 ModelIntentType = Literal['CREATE_PAGE', 'MODIFY_PAGE', 'WRITING', 'OTHER', 'UNCLEAR']
 IntentType = Literal['CREATE_PAGE', 'MODIFY_PAGE', 'WRITING', 'OTHER', 'UNCLEAR', 'PAGE_QUESTION']
 QuestionKind = Literal['TODO_STATUS', 'DATABASE_COUNT', 'SUMMARY', 'FREE']

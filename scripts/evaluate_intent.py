@@ -7,8 +7,8 @@ Only Ollama mode loads runtime settings and requires valid local configuration.
 
 import argparse
 import asyncio
-from collections import deque
 import json
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,6 @@ from app.llm.base import LLMGenerationResult, LLMProvider
 from app.modules.intent.schemas.intent_schema import IntentRequest
 from app.modules.intent.services.intent_service import IntentService
 from app.modules.page_intent.services.page_reference_evidence import detect_page_reference
-
 
 DEFAULT_CASES = Path(__file__).resolve().parents[1] / 'evaluation' / 'intent_cases.jsonl'
 SELECTION_FIXTURE = 'Taskmanly helps teams organize work and collaborate on project plans.'

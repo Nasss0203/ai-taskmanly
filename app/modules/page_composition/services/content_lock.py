@@ -15,10 +15,10 @@ import unicodedata
 from app.modules.modification_planner.services.explicit_content import (
     _KIND,
     _before_position,
-    _topic_merged,
     _hide_quotes,
     _list_items,
     _show,
+    _topic_merged,
     parse_explicit_blocks,
 )
 from app.modules.modification_planner.services.sentence_text import Folded, text_key

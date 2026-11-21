@@ -13,7 +13,6 @@ from app.modules.modification_planner.services.modification_planner_service impo
 )
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
-
 TEST_TOKEN = "test-internal-service-token"
 
 

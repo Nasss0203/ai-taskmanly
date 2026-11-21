@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.core.exceptions import LLMProviderError, LLMTimeoutError, LLMUnavailableError
+from app.main import app
 from app.modules.intent.services.intent_service import IntentService
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 

@@ -14,13 +14,13 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     AiModificationPlan,
     AiPageContext,
 )
+from app.modules.modification_planner.services.block_text import match_exact, match_partial, text_blocks
 from app.modules.modification_planner.services.explicit_content import (
     POSITION,
     _command,
     parse_explicit_blocks,
     parse_kindless_items,
 )
-from app.modules.modification_planner.services.block_text import match_exact, match_partial, text_blocks
 from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
 from app.modules.modification_planner.services.sentence_text import Folded, fold, text_key
 from app.modules.modification_planner.services.todo_status import PLAN_ADAPTER

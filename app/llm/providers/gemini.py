@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from time import perf_counter
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import httpx
 
@@ -12,7 +13,6 @@ from app.core.exceptions import (
     LLMUnavailableError,
 )
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
-
 
 logger = logging.getLogger(__name__)
 

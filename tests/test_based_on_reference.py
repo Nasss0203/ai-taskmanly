@@ -21,7 +21,6 @@ from app.modules.page_intent.services.page_reference_evidence import based_on_re
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 from tests.test_modification_planner_schema import make_context
 
-
 TEST_TOKEN = "test-internal-service-token"
 
 

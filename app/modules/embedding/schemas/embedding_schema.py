@@ -4,7 +4,6 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 
 from app.shared.request_limits import require_non_blank
 
-
 # M5 (kế hoạch hạ tầng vector, F6): NestJS batches the texts of a Page.
 MAX_EMBEDDING_TEXTS = 32
 MAX_EMBEDDING_TEXT_LENGTH = 2000

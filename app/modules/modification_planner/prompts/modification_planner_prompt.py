@@ -1,18 +1,5 @@
 import json
-
-
-
 from typing import Any
-
-
-
-
-
-
-
-
-
-
 
 ROUTER_SYSTEM_PROMPT = """
 

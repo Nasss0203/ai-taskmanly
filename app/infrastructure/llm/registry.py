@@ -2,7 +2,6 @@ from threading import Lock
 
 from app.infrastructure.llm.base import LLMProvider
 
-
 _llm_provider: LLMProvider | None = None
 _llm_provider_lock = Lock()
 

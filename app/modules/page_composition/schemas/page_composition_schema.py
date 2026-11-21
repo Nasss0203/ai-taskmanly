@@ -13,7 +13,6 @@ from pydantic import (
 
 from app.shared.request_limits import BoundedContext, Instruction, validate_input_budget
 
-
 PAGE_COMPOSITION_SCHEMA_VERSION = 1
 MAX_PAGE_COMPOSITION_ROWS = 20
 

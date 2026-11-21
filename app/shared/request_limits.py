@@ -11,7 +11,6 @@ from typing import Annotated, Any
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 
-
 MAX_INSTRUCTION_LENGTH = 4000
 MAX_WRITING_LENGTH = 8000
 MAX_INPUT_BYTES = 10000

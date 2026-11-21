@@ -18,10 +18,11 @@ import json
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 from scripts.evaluate_generation import CONTEXTS
 from scripts.evaluate_simulated_users import check

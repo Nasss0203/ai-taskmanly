@@ -21,7 +21,6 @@ from app.modules.modification_planner.services.sentence_text import (
     QUOTES,
     Folded,
     command_text,
-    fold,
     text_key,
 )
 

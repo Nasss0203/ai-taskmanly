@@ -10,7 +10,6 @@ from app.modules.page_intent.services.page_intent_service import PageIntentServi
 from app.modules.page_intent.services.page_reference_evidence import detect_page_reference
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
-
 REFERENCE_CASES = [
     ('Add a QA checklist to the "Launch Plan" page', False, 'TITLE', 'Launch Plan'),
     ('Cập nhật trang "Sprint 12": thêm mục Demo', False, 'TITLE', 'Sprint 12'),

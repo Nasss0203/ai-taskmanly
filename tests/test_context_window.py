@@ -2,7 +2,7 @@ import json
 import uuid
 
 from app.modules.modification_planner.schemas.modification_planner_schema import AiPageContext
-from app.modules.modification_planner.services.context_window import TAIL_BLOCKS, window_context
+from app.modules.modification_planner.services.context_window import window_context
 
 
 def long_page(sections: int = 20, per_section: int = 8) -> AiPageContext:

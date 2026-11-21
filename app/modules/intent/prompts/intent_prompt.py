@@ -2,7 +2,6 @@ import json
 
 from app.modules.intent.schemas.intent_schema import IntentRequest
 
-
 SYSTEM_PROMPT = r'''
 You classify a Taskmanly request. Return ONLY the provided JSON schema:
 intent, writingAction, language. No title, pageId, instruction or extra fields.

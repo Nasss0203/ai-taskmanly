@@ -1,6 +1,7 @@
 import random
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 DEV_SEED = 20261110
 

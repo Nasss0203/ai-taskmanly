@@ -2,8 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.api.dependencies import get_modification_planner_service
+from app.core.exceptions import DraftNotDoneError, InvalidLLMResponseError
 from app.modules.modification_planner.schemas.modification_planner_schema import (
     ModificationPlannerRequest,
     ModificationPlannerResponse,
@@ -11,7 +11,6 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
 )
-
 
 router = APIRouter()
 

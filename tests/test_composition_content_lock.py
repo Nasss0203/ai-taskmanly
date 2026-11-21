@@ -78,7 +78,7 @@ def test_a_described_structure_is_left_to_the_model() -> None:
     assert lock_composition_content(model, "Tạo trang roadmap 2027 gồm 4 quý, mỗi quý một heading") is model
 
 
-from app.modules.page_composition.services.content_lock import drop_unrequested_databases  # noqa: E402
+from app.modules.page_composition.services.content_lock import drop_unrequested_databases
 
 
 def with_database() -> PageCompositionDraft:
@@ -114,7 +114,7 @@ def test_a_requested_table_is_kept(instruction: str) -> None:
     assert drop_unrequested_databases(model, instruction) is model
 
 
-from app.modules.page_composition.services.content_lock import compose_explicit_page  # noqa: E402
+from app.modules.page_composition.services.content_lock import compose_explicit_page
 
 
 @pytest.mark.parametrize(("instruction", "title", "expected"), [

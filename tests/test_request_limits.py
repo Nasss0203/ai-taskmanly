@@ -193,6 +193,7 @@ def test_http_body_at_limit_and_brackets_in_strings(secured_client):
 ], ids=["chunked-size", "chunked-depth", "chunked-escape"])
 def test_stream_limits_without_content_length(chunks, status):
     import asyncio
+
     from app.api.request_limits import AIRequestLimitsMiddleware
 
     messages = iter({"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1}

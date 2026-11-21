@@ -10,6 +10,7 @@ from app.llm.base import (
     LLMTokenUsage,
     answered_by,
 )
+from app.modules.modification_planner.services.sentence_normalize import normalize_create_instruction
 from app.modules.page_composition.prompts import (
     build_page_composition_prompt,
     build_page_composition_repair_prompt,
@@ -20,21 +21,19 @@ from app.modules.page_composition.schemas.page_composition_schema import (
     PageCompositionResponse,
     PageCompositionUsage,
 )
-from app.modules.modification_planner.services.sentence_normalize import normalize_create_instruction
-from app.modules.page_composition.services.database_blocks import complete_databases, compose_table_page
-from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.services.content_lock import (
     compose_explicit_page,
     drop_unrequested_databases,
     keep_user_words,
     lock_composition_content,
 )
+from app.modules.page_composition.services.database_blocks import complete_databases, compose_table_page
+from app.modules.page_composition.services.task_blocks import normalize_task_blocks
 from app.modules.page_composition.validators import (
     PageCompositionSemanticValidationError,
     validate_page_composition_semantics,
 )
 from app.shared.json_parser import parse_json_object
-
 
 logger = logging.getLogger(__name__)
 

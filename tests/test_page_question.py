@@ -128,7 +128,7 @@ def test_edits_stay_edits(sentence):
 def test_general_questions_are_not_page_questions(sentence):
     result = intent(sentence)
     assert result is None or result.intent != "PAGE_QUESTION"
-    assert set((result.model_dump() if result else {})) <= {"intent", "writingAction", "language", "needsClarification"}
+    assert set(result.model_dump() if result else {}) <= {"intent", "writingAction", "language", "needsClarification"}
 
 
 @pytest.mark.parametrize("sentence", [

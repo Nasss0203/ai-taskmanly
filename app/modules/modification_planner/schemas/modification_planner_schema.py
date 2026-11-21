@@ -1,39 +1,21 @@
 from __future__ import annotations
 
 import json
-
-
-
 import math
-
 from typing import Annotated, Any, Literal
 
-
-
 from pydantic import (
-
     AfterValidator,
-
     BaseModel,
-
     BeforeValidator,
-
     ConfigDict,
-
     Field,
-
     StrictBool,
-
     StrictFloat,
-
     StrictInt,
-
     StrictStr,
-
     field_validator,
-
     model_validator,
-
 )
 
 from app.shared.request_limits import (
@@ -42,9 +24,6 @@ from app.shared.request_limits import (
     validate_page_context,
     validate_page_input_budget,
 )
-
-
-
 
 
 def _validate_non_blank(value: str) -> str:
@@ -77,7 +56,7 @@ def _validate_schema_version(value: object) -> object:
 
 def _validate_finite_number(
 
-    value: int | float,
+    value: float,
 
 ) -> int | float:
 

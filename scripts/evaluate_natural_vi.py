@@ -5,15 +5,23 @@ import json
 import logging
 import secrets
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from app.modules.modification_planner.services.sentence_text import text_key
 from evaluation.natural_vi_generator import DEV_BANK, DEV_SEED, generate
 from scripts import evaluate_page_question
 from scripts.evaluate_chat_writing import check_writing
 from scripts.evaluate_end_to_end import (
-    build_services, close_services, error_stop, meter_snapshot, meter_usage, run_cases, run_probe, used_model,
+    build_services,
+    close_services,
+    error_stop,
+    meter_snapshot,
+    meter_usage,
+    run_cases,
+    run_probe,
+    used_model,
 )
 from scripts.evaluate_generation import CONTEXTS, check_composition
 

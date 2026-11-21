@@ -7,7 +7,6 @@ from app.modules.embedding.schemas.embedding_schema import (
 )
 from app.modules.embedding.services.embedding_service import EmbeddingService
 
-
 router = APIRouter()
 
 

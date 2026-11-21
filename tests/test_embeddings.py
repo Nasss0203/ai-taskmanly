@@ -15,7 +15,6 @@ from app.modules.embedding.services.embedding_service import (
     EmbeddingService,
 )
 
-
 TEST_TOKEN = "test-internal-service-token"
 HEADERS = {"X-Internal-Service-Token": TEST_TOKEN}
 

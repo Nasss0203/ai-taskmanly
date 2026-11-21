@@ -7,7 +7,6 @@ from app.modules.assistant.schemas.assistant_schema import (
 )
 from app.modules.assistant.services.assistant_service import assistant_service
 
-
 router = APIRouter(dependencies=[Depends(require_internal_service_token)])
 
 

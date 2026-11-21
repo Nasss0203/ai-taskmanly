@@ -8,7 +8,6 @@ from app.main import app
 from app.modules.page_composition.services import PageCompositionService
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
-
 TEST_TOKEN = "test-internal-service-token"
 
 

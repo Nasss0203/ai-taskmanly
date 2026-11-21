@@ -8,8 +8,8 @@ from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
 )
-from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.page_composition.services import PageCompositionService
+from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.writing.services import WritingService
 
 

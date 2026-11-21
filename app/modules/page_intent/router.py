@@ -8,7 +8,6 @@ from app.modules.page_intent.schemas.page_intent_schema import (
 )
 from app.modules.page_intent.services.page_intent_service import PageIntentService
 
-
 router = APIRouter()
 
 

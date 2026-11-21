@@ -7,7 +7,6 @@ from app.modules.embedding.schemas.embedding_schema import (
     EmbeddingResponse,
 )
 
-
 # Qwen3-Embedding ranks better when the search sentence says what it is for;
 # Page text is embedded as it is. Other models take both as they are.
 QUERY_INSTRUCTION = (

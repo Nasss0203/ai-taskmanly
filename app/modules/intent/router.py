@@ -4,7 +4,6 @@ from app.api.dependencies import get_intent_service
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResponse
 from app.modules.intent.services.intent_service import IntentService
 
-
 router = APIRouter()
 
 

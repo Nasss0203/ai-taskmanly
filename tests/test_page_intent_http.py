@@ -7,7 +7,6 @@ from app.main import app
 from app.modules.page_intent.services.page_intent_service import PageIntentService
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
-
 TEST_TOKEN = "test-internal-service-token"
 
 

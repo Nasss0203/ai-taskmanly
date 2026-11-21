@@ -3,8 +3,8 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.internal.v1.router import router as internal_router
-from app.api.v1.router import router
 from app.api.request_limits import AIRequestLimitsMiddleware
+from app.api.v1.router import router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -16,8 +16,8 @@ from app.modules.intent.services.intent_service import IntentService
 from app.modules.modification_planner.services.modification_planner_service import (
     ModificationPlannerService,
 )
-from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.page_composition.services import PageCompositionService
+from app.modules.page_intent.services.page_intent_service import PageIntentService
 from app.modules.page_question.service import PageQuestionService
 from app.modules.writing.services import WritingService
 

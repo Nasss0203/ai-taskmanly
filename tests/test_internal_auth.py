@@ -4,12 +4,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.core.config import Settings
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
+from app.main import app
 from app.modules.writing.services import WritingService
 from tests.fakes.fake_async_llm_provider import FakeLLMProvider
-
 
 TEST_TOKEN = "test-internal-service-token"
 
@@ -88,9 +87,8 @@ def test_lifespan_closes_default_when_override_creation_fails(
         Mock(side_effect=[provider, RuntimeError("override creation failed")]),
     )
 
-    with pytest.raises(RuntimeError, match="override creation failed"):
-        with TestClient(app):
-            pass
+    with pytest.raises(RuntimeError, match="override creation failed"), TestClient(app):
+        pass
 
     provider.close.assert_awaited_once()
 

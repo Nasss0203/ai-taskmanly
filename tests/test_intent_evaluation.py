@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from scripts.evaluate_intent import evaluate_cases, load_cases, request_for_case
 from app.modules.intent.schemas.intent_schema import IntentResponse, IntentResult
+from scripts.evaluate_intent import evaluate_cases, load_cases, request_for_case
 
 
 def case(identifier, text, intent, **extra):

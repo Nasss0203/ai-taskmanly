@@ -1,4 +1,4 @@
-"""Read-only manual semantic smoke test using a real local Ollama model.
+r"""Read-only manual semantic smoke test using a real local Ollama model.
 
 Run: .venv\Scripts\python.exe -m scripts.smoke_page_intent_ollama
 Optional: --model qwen3:4b-instruct
@@ -7,14 +7,12 @@ This script never touches the business database.
 
 import argparse
 import asyncio
-import json
 from time import perf_counter
 
 from app.core.config import get_settings
 from app.llm.providers.ollama import OllamaProvider
 from app.modules.page_intent.schemas.page_intent_schema import PageIntentRequest
 from app.modules.page_intent.services.page_intent_service import PageIntentService
-
 
 CASES = [
     (

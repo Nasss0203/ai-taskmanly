@@ -12,7 +12,6 @@ from app.modules.task.services.generate_task_service import (
     generate_task_service,
 )
 
-
 GENERAL_ASSISTANT_SYSTEM_PROMPT = (
     "Bạn là AI Assistant của Taskmanly. "
     "Trả lời ngắn gọn, rõ ràng và bằng tiếng Việt."

@@ -587,6 +587,7 @@ def test_invalid_response_logs_never_include_private_content(caplog, failure):
 
 def test_provider_error_message_is_not_logged(caplog, monkeypatch):
     from unittest.mock import AsyncMock
+
     from app.core.exceptions import LLMUnavailableError
 
     private = "SENSITIVE_PROVIDER_ERROR_FIXTURE_49371"

@@ -21,7 +21,6 @@ import httpx
 from app.core.config import get_settings
 from tests.test_modification_planner_schema import make_context
 
-
 SERVER_LOG = Path(os.environ.get("LOCALAPPDATA", "")) / "Ollama" / "server.log"
 LOG_EVENTS = {
     "loads": "loading model via llama-server",

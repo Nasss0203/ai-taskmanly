@@ -1,39 +1,19 @@
 from __future__ import annotations
 
-
-
 import json
 
-
-
 from app.modules.modification_planner.prompts.modification_planner_prompt import (
-
     CREATE_DATABASE_ROWS_SYSTEM_PROMPT,
-
     INSERT_BLOCKS_SYSTEM_PROMPT,
     MIXED_OPERATIONS_SYSTEM_PROMPT,
-
     NEED_MORE_CONTEXT_SYSTEM_PROMPT,
-
-
     ROUTER_SYSTEM_PROMPT,
-
-
     build_create_database_rows_generation_prompt,
-
     build_insert_blocks_generation_prompt,
     build_mixed_operations_generation_prompt,
-
-
-
     build_modification_planner_route_prompt,
-
     build_need_more_context_generation_prompt,
-
 )
-
-
-
 
 
 def make_context() -> dict:

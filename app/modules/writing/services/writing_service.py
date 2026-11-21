@@ -9,7 +9,6 @@ from app.modules.writing.schemas import WritingAction, WritingRequest, WritingRe
 from app.modules.writing.schemas.writing_schema import WritingUsage
 from app.modules.writing.services.writing_check import PROBLEMS, demanded_words, directives, writing_problem
 
-
 logger = logging.getLogger(__name__)
 
 DIRECTIVE_FREE = (WritingAction.SUMMARIZE, WritingAction.SHORTEN, WritingAction.CONTINUE, WritingAction.EXPAND)

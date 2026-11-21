@@ -12,7 +12,6 @@ from app.modules.modification_planner.services.modification_planner_service impo
 from app.modules.modification_planner.services.reference_grounding import is_grounded
 from tests.test_modification_planner_schema import make_context
 
-
 PASSAGES = [
     "Bug blocker",
     "Ứng dụng bị crash khi tải ảnh lớn",

@@ -19,7 +19,6 @@ from typing import Any
 
 from app.shared.list_markers import strip_list_marker
 
-
 DEFAULT_CASES = Path(__file__).resolve().parents[1] / "evaluation" / "generation_cases.jsonl"
 
 

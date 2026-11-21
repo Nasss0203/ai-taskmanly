@@ -1,10 +1,10 @@
 from app.infrastructure.llm.base import LLMProvider
 from app.infrastructure.llm.registry import get_llm_provider
 from app.modules.assistant.intent import AssistantIntent
-from app.modules.assistant.schemas.context_schema import CurrentContext
 from app.modules.assistant.prompts.detect_intent_prompt import (
     DETECT_INTENT_SYSTEM_PROMPT,
 )
+from app.modules.assistant.schemas.context_schema import CurrentContext
 
 
 class DetectIntentService:

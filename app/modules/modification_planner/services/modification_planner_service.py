@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import logging
 import re
 import unicodedata
 from time import perf_counter
 from typing import Any, NoReturn
+
 from pydantic import TypeAdapter, ValidationError
+
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import (
     LLMGenerationResult,
@@ -35,37 +38,38 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     ModificationPlannerRoute,
     ModificationPlannerUsage,
 )
-from app.modules.modification_planner.validators.modification_planner_semantic_validator import (
-    ModificationPlannerSemanticValidationError,
-    validate_modification_plan_semantics,
-)
-from app.shared.json_parser import parse_json_object
 from app.modules.modification_planner.services.block_delete import plan_block_delete
+from app.modules.modification_planner.services.block_text import plan_block_text
+from app.modules.modification_planner.services.context_window import window_context
 from app.modules.modification_planner.services.database_rows import (
     DATABASE_ROWS_MODEL,
     ROWS_AND_BLOCKS_MODEL,
     plan_database_rows,
     plan_rows_and_blocks,
 )
-from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
-from app.modules.modification_planner.services.context_window import window_context
-from app.modules.modification_planner.services.explicit_plan import EXPLICIT_CONTENT_MODEL, plan_explicit_content
 from app.modules.modification_planner.services.explicit_content import mentions_position, parse_explicit_blocks
-from app.modules.modification_planner.services.sentence_text import QUOTES, command_text
-from app.modules.modification_planner.services.block_text import plan_block_text
-from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
-from app.modules.modification_planner.services.todo_status import (
-    TODO_STATUS_MODEL,
-    TODO_STATUS_PROVIDER,
-    plan_todo_status,
-)
-from app.shared.list_markers import has_list_marker, strip_list_marker
-from app.modules.modification_planner.services.reference_grounding import keep_grounded_blocks
+from app.modules.modification_planner.services.explicit_plan import EXPLICIT_CONTENT_MODEL, plan_explicit_content
+from app.modules.modification_planner.services.missing_target import MISSING_TARGET_MODEL, plan_missing_target
 from app.modules.modification_planner.services.reference_checklist import (
     REFERENCE_CHECKLIST_MODEL,
     REFERENCE_CHECKLIST_PROVIDER,
     plan_reference_checklist,
 )
+from app.modules.modification_planner.services.reference_grounding import keep_grounded_blocks
+from app.modules.modification_planner.services.sentence_normalize import normalize_instruction
+from app.modules.modification_planner.services.sentence_text import QUOTES, command_text
+from app.modules.modification_planner.services.todo_status import (
+    TODO_STATUS_MODEL,
+    TODO_STATUS_PROVIDER,
+    plan_todo_status,
+)
+from app.modules.modification_planner.validators.modification_planner_semantic_validator import (
+    ModificationPlannerSemanticValidationError,
+    validate_modification_plan_semantics,
+)
+from app.shared.json_parser import parse_json_object
+from app.shared.list_markers import has_list_marker, strip_list_marker
+
 logger = logging.getLogger(__name__)
 PLAN_ADAPTER = TypeAdapter(AiModificationPlan)
 ROUTE_ADAPTER = TypeAdapter(

@@ -14,7 +14,6 @@ from app.core.exceptions import (
 )
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
 
-
 logger = logging.getLogger(__name__)
 
 

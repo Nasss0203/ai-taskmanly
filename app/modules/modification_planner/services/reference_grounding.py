@@ -11,11 +11,9 @@ import re
 import unicodedata
 from typing import Any
 
-
 # Words most sentences share: "bị" in "bị crash" must not ground "chuẩn bị".
 FILLER = frozenset(
-    "bi cac cho khi tren trong cua la de co khong duoc voi sau lai va mot nhung "
-    "the and of to in on for a an".split()
+    ["bi", "cac", "cho", "khi", "tren", "trong", "cua", "la", "de", "co", "khong", "duoc", "voi", "sau", "lai", "va", "mot", "nhung", "the", "and", "of", "to", "in", "on", "for", "a", "an"]
 )
 # Share of an item's words that must be found, in the request alone or in one
 # passage (with the request); at least half must be the passage's own words.

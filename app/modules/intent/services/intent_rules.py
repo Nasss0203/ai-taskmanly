@@ -3,19 +3,23 @@
 import re
 import unicodedata
 
-from app.shared.vi_vocabulary import pattern, words
-from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.intent.schemas.intent_schema import IntentRequest, IntentResult, WritingActionName
 from app.modules.intent.services.page_question_rules import page_question
+from app.modules.intent.services.writing_source import inline_writing_text
 from app.modules.modification_planner.services.block_delete import parse_block_delete
 from app.modules.modification_planner.services.block_text import parse_block_text
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.modules.page_intent.services.page_reference_evidence import (
-    QUOTED_TEXT, activity_page_reference, content_page_reference, detect_with_titles,
+    QUOTED_TEXT,
+    activity_page_reference,
+    content_page_reference,
+    detect_with_titles,
+    has_multiple_page_targets,
     is_read_only_page_request,
-    has_multiple_page_targets, mask_quoted_text, source_backed_edit_instruction,
+    mask_quoted_text,
+    source_backed_edit_instruction,
 )
-
+from app.shared.vi_vocabulary import pattern, words
 
 PAGE_WORD = re.compile(r'(?<!\w)(?<!tinh )(?:page|trang)(?!\w)(?!\s+thai\b)(?!\s+trong(?:\s+hon\b|\s*(?:[,.!?]|$)))',
                        re.IGNORECASE)

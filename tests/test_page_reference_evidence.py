@@ -196,7 +196,8 @@ def test_ambiguous_or_plain_reference_does_not_skip_model(source):
 ])
 def test_read_only_and_negated_sources_have_no_edit_evidence(source):
     from app.modules.page_intent.services.page_reference_evidence import (
-        explicit_trailing_page_edit, source_backed_edit_instruction,
+        explicit_trailing_page_edit,
+        source_backed_edit_instruction,
     )
     evidence = detect_page_reference(source)
     assert evidence.instruction is None

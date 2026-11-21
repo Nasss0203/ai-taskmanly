@@ -2,18 +2,18 @@ import logging
 
 from pydantic import ValidationError
 
-from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
+from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.modules.page_intent.prompts.page_intent_prompt import SYSTEM_PROMPT
 from app.modules.page_intent.schemas.page_intent_schema import (
     ActivityPageIntent,
     ContentPageIntent,
     DescriptionPageIntent,
-    ScopedTitlePageIntent,
     PageIntentExtraction,
     PageIntentRequest,
     PageIntentResponse,
+    ScopedTitlePageIntent,
 )
 from app.modules.page_intent.services.page_reference_evidence import (
     activity_page_reference,
@@ -22,15 +22,14 @@ from app.modules.page_intent.services.page_reference_evidence import (
     description_page_reference,
     detect_page_reference,
     detect_with_titles,
-    scoped_page_reference,
     explicit_trailing_page_edit,
-    is_standalone_writing_request,
     is_read_only_page_request,
+    is_standalone_writing_request,
     normalize,
+    scoped_page_reference,
     source_backed_edit_instruction,
 )
 from app.shared.json_parser import parse_json_object
-
 
 logger = logging.getLogger(__name__)
 

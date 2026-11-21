@@ -5,7 +5,6 @@ from typing import Any
 from app.core.exceptions import InvalidLLMResponseError, LLMProviderError
 from app.llm.base import LLMGenerationResult, LLMProvider
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -2,7 +2,6 @@ import re
 
 from app.modules.writing.schemas import WritingAction
 
-
 SYSTEM_PROMPT = """
 Bạn là AI Writing Assistant của Taskmanly.
 

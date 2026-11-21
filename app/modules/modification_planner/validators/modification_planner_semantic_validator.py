@@ -18,7 +18,6 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     SetTodoCheckedOperation,
 )
 
-
 WRITABLE_PROPERTY_TYPES = frozenset(
     {
         "TITLE",

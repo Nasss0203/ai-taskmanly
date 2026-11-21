@@ -12,7 +12,6 @@ from app.modules.page_composition.schemas.page_composition_schema import (
 )
 from app.shared.list_markers import has_list_marker, strip_list_marker
 
-
 TOGGLE_REQUEST = re.compile(
     r"toggle|gập|thu gọn|mở rộng|đóng mở|collaps", re.IGNORECASE,
 )

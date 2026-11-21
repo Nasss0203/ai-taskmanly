@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-
-
 import pytest
-
 from pydantic import TypeAdapter, ValidationError
-
-
 
 from app.modules.modification_planner.schemas.modification_planner_schema import (
     AiModificationPlan,
@@ -20,10 +15,6 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
     ModificationPlannerResponse,
     ModificationPlannerRoute,
 )
-
-
-
-
 
 plan_adapter = TypeAdapter(AiModificationPlan)
 

@@ -1,67 +1,33 @@
 from __future__ import annotations
 
-
 import asyncio
-
-
 import json
-
-
 from copy import deepcopy
-
-
 from typing import Any
 
-
 import pytest
-
-
 from pydantic import TypeAdapter, ValidationError
 
-
 from app.core.exceptions import InvalidLLMResponseError
-
-
 from app.llm.base import LLMGenerationResult, LLMTokenUsage
-
-
 from app.modules.modification_planner.schemas.modification_planner_schema import (
-
     ChecklistInsertBlocksOperationBatch,
-
     ChecklistMixedModificationOperationBatch,
-
     ChecklistWithHeadingInsertBlocksOperationBatch,
-
     CreateDatabaseRowsOperationBatch,
-
     InsertBlocksOperationBatch,
-
     MixedModificationOperationBatch,
-
     ModificationNeedMoreContextDetails,
-
     ModificationPlannerRequest,
-
     ModificationPlannerRoute,
-
 )
-
-
 from app.modules.modification_planner.services.modification_planner_service import (
-
-
     ModificationPlannerService,
-
-
 )
-
-
-from tests.fakes.fake_async_llm_provider import FakeLLMProvider
-
 from app.modules.modification_planner.validators.modification_planner_semantic_validator import (
     ModificationPlannerSemanticValidationError,
 )
+from tests.fakes.fake_async_llm_provider import FakeLLMProvider
 
 
 @pytest.mark.parametrize("failure", ["route", "stage_two", "semantic"])
@@ -128,6 +94,7 @@ def test_provider_error_logging_excludes_private_message(
     stage: str,
 ) -> None:
     from unittest.mock import AsyncMock
+
     from app.core.exceptions import LLMUnavailableError
 
     private = "PRIVATE_PROVIDER_ERROR_FIX04B_73921"

@@ -19,7 +19,6 @@ from app.modules.modification_planner.schemas.modification_planner_schema import
 from app.shared.list_markers import strip_list_marker
 from app.shared.vi_vocabulary import pattern
 
-
 REFERENCE_CHECKLIST_PROVIDER = "rules"
 REFERENCE_CHECKLIST_MODEL = "reference-checklist-v1"
 
@@ -32,7 +31,7 @@ CHECKLIST = re.compile(
 )
 # Words that say nothing about which heading is meant.
 FILLER = frozenset(
-    "cac nhung ve gom tat ca moi of the all for about with".split()
+    ["cac", "nhung", "ve", "gom", "tat", "ca", "moi", "of", "the", "all", "for", "about", "with"]
 )
 
 

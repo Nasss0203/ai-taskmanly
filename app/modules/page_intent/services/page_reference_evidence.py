@@ -15,7 +15,6 @@ from app.modules.modification_planner.services.block_text import parse_block_tex
 from app.modules.modification_planner.services.todo_status import parse_todo_status
 from app.shared.vi_vocabulary import pattern
 
-
 ReferenceType = Literal["TITLE", "CURRENT_PAGE", "UNRESOLVED", "ACTIVITY", "DESCRIPTION", "CONTENT"]
 
 PAGE_MARKER = re.compile(r"(?<!\w)(?:page|trang)(?!\w)", re.IGNORECASE)

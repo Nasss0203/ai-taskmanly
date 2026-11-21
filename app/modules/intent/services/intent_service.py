@@ -2,21 +2,38 @@ import logging
 
 from pydantic import ValidationError
 
-from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.core.exceptions import InvalidLLMResponseError
 from app.llm.base import LLMProvider
 from app.modules.intent.prompts.intent_prompt import build_intent_prompt
 from app.modules.intent.schemas.intent_schema import IntentExtraction, IntentRequest, IntentResponse, IntentResult
 from app.modules.intent.services.intent_rules import (
-    PAGE_WORD, asks_to_create, creation_evidence, deterministic_result, directive_text, edit_evidence,
-    inline_source, opens_new_page, puts_into_new_page, is_page_summary, is_read_only, multiple_commands, named_languages, names_page_as_place, result, says_new_page,
-    translation_language, unsafe_override, unsupported_request, writing_action,
+    PAGE_WORD,
+    asks_to_create,
+    creation_evidence,
+    deterministic_result,
+    directive_text,
+    edit_evidence,
+    inline_source,
+    is_page_summary,
+    is_read_only,
+    multiple_commands,
+    named_languages,
+    names_page_as_place,
+    opens_new_page,
+    puts_into_new_page,
+    result,
+    says_new_page,
+    translation_language,
+    unsafe_override,
+    unsupported_request,
+    writing_action,
 )
+from app.modules.modification_planner.services.sentence_normalize import normalize_edit_instruction
 from app.modules.page_intent.services.page_reference_evidence import (
-    content_page_reference, detect_with_titles,
+    content_page_reference,
+    detect_with_titles,
 )
 from app.shared.json_parser import parse_json_object
-
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,6 @@ from app.llm.providers.ollama_embedding import OllamaEmbeddingProvider
 from app.modules.embedding.schemas.embedding_schema import EmbeddingRequest
 from app.modules.embedding.services.embedding_service import EmbeddingService
 
-
 DEFAULT_CASES = Path(__file__).resolve().parents[1] / "evaluation" / "embedding_cases.json"
 
 

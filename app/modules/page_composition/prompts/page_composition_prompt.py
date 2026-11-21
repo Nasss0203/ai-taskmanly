@@ -1,7 +1,6 @@
 import json
 from typing import Any
 
-
 SYSTEM_PROMPT = """
 Bạn là AI Page Composition Generator của Taskmanly.
 

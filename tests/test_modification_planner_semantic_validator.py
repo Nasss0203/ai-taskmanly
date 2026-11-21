@@ -14,7 +14,6 @@ from app.modules.modification_planner.validators.modification_planner_semantic_v
     validate_modification_plan_semantics,
 )
 
-
 plan_adapter = TypeAdapter(AiModificationPlan)
 
 
